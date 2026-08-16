@@ -6,6 +6,7 @@ import json
 import time
 from pathlib import Path
 
+from backend.config import FAST_DEV
 from backend.tools import tamarind
 
 
@@ -41,7 +42,14 @@ def run_structure(state: dict, progress_cb=None) -> dict:
         steps.append({"action": "Reuse cached structure metrics", "detail": str(structures_dir)})
     else:
         live_ok = False
-        if mode == "live":
+        if mode == "live" and FAST_DEV:
+            steps.append(
+                {
+                    "action": "Tamarind folds skipped (IDOCTOR_FAST)",
+                    "detail": "Dev mode — heuristic_v1 metrics only. Not for demo.",
+                }
+            )
+        elif mode == "live":
             try:
                 seqs = [
                     {"id": d["id"], "sequence": d["sequence"]}
@@ -53,8 +61,10 @@ def run_structure(state: dict, progress_cb=None) -> dict:
                 result = tamarind.submit_fold(
                     seqs,
                     structures_dir=str(structures_dir),
-                    max_jobs=2,
-                    timeout=600,
+                    # Folds are the slow node; 3 keeps a live run to a few minutes
+                    # while still producing real structures to compare against.
+                    max_jobs=3,
+                    timeout=900,
                 )
                 if result:
                     live_ok = True

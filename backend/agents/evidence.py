@@ -7,13 +7,29 @@ import shutil
 import time
 from pathlib import Path
 
-from backend.config import FIXTURES_DIR
+from backend.config import FAST_DEV, FIXTURES_DIR, RUNS_DIR
 from backend.contracts.validate import validate_spec
 from backend.tools import paperclip
 
 
 AGENT_NAME = "evidence"
 AGENT_DISPLAY = "Literature & databases (Paperclip)"
+
+
+def _newest_live_spec() -> Path | None:
+    """Most recent spec.json produced by a live literature search, for dev reuse."""
+    candidates = []
+    for run in RUNS_DIR.glob("*/"):
+        spec, prov = run / "spec.json", run / "provenance.json"
+        if not (spec.is_file() and prov.is_file()):
+            continue
+        try:
+            nodes = json.loads(prov.read_text()).get("nodes") or {}
+        except (json.JSONDecodeError, OSError):
+            continue
+        if nodes.get("evidence") == "live":
+            candidates.append(spec)
+    return max(candidates, key=lambda p: p.stat().st_mtime, default=None)
 
 
 def run_evidence(state: dict, progress_cb=None) -> dict:
@@ -37,7 +53,19 @@ def run_evidence(state: dict, progress_cb=None) -> dict:
         node_source = "cached"
         steps.append({"action": "Load cached spec", "detail": str(spec_path)})
     else:
-        if mode == "live":
+        if mode == "live" and FAST_DEV:
+            cached = _newest_live_spec()
+            if cached:
+                scientific_spec = json.loads(cached.read_text())
+                node_source = "live"
+                steps.append(
+                    {
+                        "action": "Reused cached literature spec (IDOCTOR_FAST)",
+                        "detail": f"Dev mode — no new search. From {cached.parent.name}",
+                    }
+                )
+
+        if scientific_spec is None and mode == "live":
             tool_calls.append(
                 {
                     "tool": "paperclip.gather_kras_resistance_evidence",

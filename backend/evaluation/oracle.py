@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from backend.config import FAST_DEV
+
 
 def pKi(ki_nm: float | None) -> float | None:
     """pKi = 9 - log10(Ki_nM)."""
@@ -24,6 +26,11 @@ def _spearman(xs: list[float], ys: list[float]) -> float | None:
     if n < 2:
         return None
     try:
+        # Importing scipy costs 5-30s cold, which dominates a dev run. The
+        # rank-based fallback below agrees with it whenever there are no ties.
+        if FAST_DEV:
+            raise ImportError("IDOCTOR_FAST: using tie-free rank fallback")
+
         from scipy.stats import spearmanr
 
         rho, _ = spearmanr(xs, ys)

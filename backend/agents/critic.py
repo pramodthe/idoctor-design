@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from backend.agents.llm import call_llm
+from backend.config import FAST_DEV
 from backend.contracts.validate import validate_verdicts
 
 
@@ -191,7 +192,14 @@ def _criticize_smallmol(compound: dict, eval_result: dict, mutation_ids: list[st
 
 
 def _maybe_enrich_summaries(items: list[dict], hypothesis: str) -> tuple[list[dict], dict | None]:
-    """Optional LLM polish; on failure keep template summaries."""
+    """Optional LLM polish; on failure keep template summaries.
+
+    Verdicts are decided by the rules above — this only rewrites prose, so a dev
+    run can skip it without changing any promote/hold/reject outcome.
+    """
+    if FAST_DEV:
+        return items, None
+
     prompt = (
         "You are a careful medicinal chemistry critic. Rewrite each summary to ≤80 words. "
         "Do NOT invent Ki values, PDB IDs, or numbers not already present. "
