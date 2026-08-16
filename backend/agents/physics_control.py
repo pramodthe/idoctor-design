@@ -8,12 +8,14 @@ import time
 from pathlib import Path
 
 from backend.compounds import KRAS_COMPOUNDS
-from backend.config import FIXTURES_DIR
+from backend.config import DATA_DIR, FIXTURES_DIR
 from backend.contracts.validate import validate_smallmol
 
 
 AGENT_NAME = "physics"
 AGENT_DISPLAY = "Docking control (AutoDock Vina)"
+
+DOCKING_SCORES = DATA_DIR / "docking" / "vina_scores.json"
 
 
 def _enrich_from_kras_library(smallmol: dict) -> dict:
@@ -32,32 +34,79 @@ def _enrich_from_kras_library(smallmol: dict) -> dict:
     return smallmol
 
 
+def _load_real_docking() -> dict[str, dict[str, float]]:
+    """Load measured AutoDock Vina scores, keyed receptor -> compound -> kcal/mol."""
+    path = DOCKING_SCORES
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def _build_live_smallmol(fixture: dict) -> dict:
-    """Include all KRAS_COMPOUNDS with known_ki; reuse vina from fixture where ids match."""
+    """Include all KRAS_COMPOUNDS with known_ki, preferring measured Vina scores.
+
+    Real scores come from AutoDock Vina jobs run on Tamarind against a cleaned apo
+    6OIM and PDBFixer-built mutant receptors. Fixture values are only used to fill
+    compounds that were never docked, and the note records which applied.
+    """
     fixture_by_id = {c["id"]: c for c in (fixture.get("compounds") or [])}
+    real = _load_real_docking()
+    real_wt = real.get("WT") or {}
+    mutant_receptors = [k for k in real if k != "WT"]
+
     compounds = []
+    n_real = 0
     for known in KRAS_COMPOUNDS:
-        fx = fixture_by_id.get(known["id"], {})
+        cid = known["id"]
+        fx = fixture_by_id.get(cid, {})
+        vina_wt = real_wt.get(cid)
+        measured = vina_wt is not None
+        if measured:
+            n_real += 1
+        else:
+            vina_wt = fx.get("vina_wt")
+
+        vina_mutants = {m: real[m][cid] for m in mutant_receptors if cid in real[m]}
+        if not vina_mutants and not measured:
+            vina_mutants = fx.get("vina_mutants") or {}
+
         compounds.append(
             {
-                "id": known["id"],
-                "name": known.get("name") or fx.get("name") or known["id"],
+                "id": cid,
+                "name": known.get("name") or fx.get("name") or cid,
                 "smiles": known.get("smiles") or fx.get("smiles") or "",
                 "known_ki_nm": known.get("known_ki_nm"),
-                "vina_wt": fx.get("vina_wt"),
-                "vina_mutants": fx.get("vina_mutants") or {},
+                "vina_wt": vina_wt,
+                "vina_mutants": vina_mutants,
+                "docking_provenance": "measured" if measured else "fixture",
                 "pains_flags": fx.get("pains_flags") or [],
                 "lipinski_violations": fx.get("lipinski_violations"),
             }
         )
+
+    if n_real:
+        note = (
+            f"AutoDock Vina on Tamarind: {n_real}/{len(compounds)} compounds docked "
+            f"against a cleaned apo 6OIM receptor (box centred on the MOV/sotorasib "
+            f"site, exhaustiveness 32); mutant receptors {', '.join(sorted(mutant_receptors))} "
+            "built with PDBFixer. Rigid receptor, no side-chain repacking — deltas are "
+            "directional, not quantitative. Remaining compounds fall back to fixture values."
+        )
+    else:
+        note = (
+            "Live mode: known_ki_nm from KRAS_COMPOUNDS; vina scores reused from fixture "
+            "where compound ids match (cached docking, not a fresh Vina run)."
+        )
+
     return {
         "schema_version": fixture.get("schema_version", "1.0"),
         "receptor_pdb_wt": fixture.get("receptor_pdb_wt", "6OIM"),
         "compounds": compounds,
-        "note": (
-            "Live mode: known_ki_nm from KRAS_COMPOUNDS; vina scores reused from fixture "
-            "where compound ids match (cached docking, not a fresh Vina run)."
-        ),
+        "note": note,
     }
 
 

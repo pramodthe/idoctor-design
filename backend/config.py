@@ -56,14 +56,25 @@ SCORING_VERSION = "vina_v1"
 
 RCSB_BASE_URL = "https://files.rcsb.org/download"
 
+# Dev loop switch. With IDOCTOR_FAST=1 a live run skips the three network-bound
+# nodes: Tamarind folds (~18 min), literature search (~30s) and the critic's LLM
+# summary polish (~9s). Everything still runs and every skip is recorded in
+# provenance, so a fast run is honest about being degraded — never demo from one.
+FAST_DEV = os.getenv("IDOCTOR_FAST", "0").strip().lower() in {"1", "true", "yes", "on"}
+
 KNOWN_TARGETS = {
     "6OIM": {
         "name": "KRAS G12C (Lung Cancer)",
-        "ligand_id": "ARS",
+        # Sotorasib (AMG 510) is deposited as MOV in 6OIM.
+        "ligand_id": "MOV",
         "reference_drug_id": "sotorasib",
         "reference_drug_name": "Sotorasib (Lumakras)",
         "binding_site_residues": ["Cys12", "His95", "Tyr96", "Asp69"],
-        "binding_site_center": [-2.5, -1.8, 12.3],
+        # Centroid of the 41 MOV (sotorasib) atoms in 6OIM — the Switch II pocket
+        # as actually occupied by the drug. Recompute if the target PDB changes.
+        "binding_site_center": [1.87, -8.26, -1.36],
+        # Ligand extent is 13.9 x 11.7 x 5.9 A; box adds room for rotatable bonds.
+        "binding_site_box": [22.0, 20.0, 16.0],
         "pocket_volume_A3": 530.0,
         "resolution_angstroms": 1.65,
         "biological_context": (
