@@ -10,6 +10,7 @@ interface DesignTableProps {
   /** If true, only show rejected rows (reject pile) */
   rejectOnly?: boolean;
   title?: string;
+  designEngine?: string;
 }
 
 const VERDICT_BADGE: Record<string, string> = {
@@ -17,6 +18,15 @@ const VERDICT_BADGE: Record<string, string> = {
   reject: "bg-red-50 text-red-800 border-red-300",
   hold: "bg-slate-100 text-slate-700 border-slate-300",
 };
+
+function engineLabel(d: Design, payloadEngine?: string): string {
+  const raw = `${d.generator || ""} ${payloadEngine || ""} ${d.fold_method || ""} ${d.provenance || ""}`.toLowerCase();
+  if (raw.includes("bindcraft")) return "BindCraft (Tamarind)";
+  if (raw.includes("sequence_design") || raw.includes("heuristic"))
+    return "heuristic generator — not RFdiffusion";
+  if (d.provenance === "fixture" || payloadEngine === "fixture") return "fixture";
+  return d.generator || payloadEngine || d.provenance || "unknown";
+}
 
 function truncateSeq(seq: string, n = 28): string {
   if (seq.length <= n) return seq;
@@ -37,6 +47,7 @@ export default function DesignTable({
   deltas,
   rejectOnly = false,
   title,
+  designEngine,
 }: DesignTableProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -69,6 +80,7 @@ export default function DesignTable({
               <th className="pb-2 pr-3 font-semibold">Sequence</th>
               <th className="pb-2 pr-3 font-semibold">Len</th>
               <th className="pb-2 pr-3 font-semibold">pLDDT</th>
+              <th className="pb-2 pr-3 font-semibold">Engine</th>
               <th className="pb-2 pr-3 font-semibold">WT / mutant</th>
               <th className="pb-2 font-semibold">Verdict</th>
             </tr>
@@ -106,6 +118,9 @@ export default function DesignTable({
                     <td className="py-2.5 pr-3 font-mono text-slate-700">
                       {d.plddt != null ? d.plddt.toFixed(1) : "—"}
                     </td>
+                    <td className="py-2.5 pr-3 text-[10px] text-slate-600">
+                      {engineLabel(d, designEngine)}
+                    </td>
                     <td className="py-2.5 pr-3 font-mono text-[10px] text-slate-600">
                       {delta?.wt_score != null ? delta.wt_score : "—"} / {mutantStr}
                     </td>
@@ -123,7 +138,7 @@ export default function DesignTable({
                   </tr>
                   {open && (
                     <tr className="border-b border-slate-100 bg-slate-50/60">
-                      <td colSpan={6} className="px-3 py-3">
+                      <td colSpan={7} className="px-3 py-3">
                         <div className="space-y-2">
                           <div>
                             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
@@ -133,6 +148,11 @@ export default function DesignTable({
                               {`>${d.id}\n${d.sequence}`}
                             </pre>
                           </div>
+                          <p className="text-[11px] text-slate-600">
+                            Engine: {engineLabel(d, designEngine)}
+                            {d.fold_method ? ` · fold_method=${d.fold_method}` : ""}
+                            {d.provenance ? ` · provenance=${d.provenance}` : ""}
+                          </p>
                           {v && (
                             <div>
                               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">

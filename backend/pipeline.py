@@ -20,11 +20,12 @@ from backend.agents.experiment import run_experiment
 from backend.agents.physics_control import run_physics
 from backend.agents.structure import run_structure
 from backend.config import IDOCTOR_DESIGN_DEFAULT_MODE, RUNS_DIR
+from backend.contracts.novel_designs import export_from_run
 from backend.contracts.validate import validate_provenance
 
 AGENT_DISPLAY = {
     "evidence": "Literature & databases (Paperclip)",
-    "designer": "Sequence design (Proto)",
+    "designer": "Sequence design (BindCraft)",
     "structure": "Fold & complex (Tamarind)",
     "physics": "Docking control (AutoDock Vina)",
     "evaluate": "Score vs experiment",
@@ -124,6 +125,7 @@ def _load_run_payload(run_dir: Path) -> dict[str, Any]:
         "eval_result": _json("eval.json"),
         "verdicts": _json("verdicts.json"),
         "experiment_md": experiment_md,
+        "novel_designs": _json("novel_designs.json"),
         "provenance": _json("provenance.json"),
         "agent_traces": _json("traces.json") or [],
         "hypothesis": (_json("spec.json") or {}).get("hypothesis", ""),
@@ -175,6 +177,23 @@ def run_idoctor_design(
     traces = result.get("agent_traces") or []
     provenance = _write_run_meta(run_dir, run_id, mode, nodes, traces)
 
+    try:
+        export_from_run(run_dir)
+    except Exception as exc:  # noqa: BLE001
+        (run_dir / "novel_designs.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "source": "idoctor-design",
+                    "refused": [],
+                    "novel_designs": [],
+                    "error": str(exc),
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+
     payload = _load_run_payload(run_dir)
     return {
         "run_id": run_id,
@@ -189,6 +208,7 @@ def run_idoctor_design(
         "eval_result": payload.get("eval_result") or result.get("eval_result"),
         "verdicts": payload.get("verdicts") or result.get("verdicts"),
         "experiment_md": payload.get("experiment_md") or result.get("experiment_md", ""),
+        "novel_designs": payload.get("novel_designs"),
         "provenance": payload.get("provenance") or provenance,
         "agent_traces": payload.get("agent_traces") or traces,
     }

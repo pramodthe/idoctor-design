@@ -1,6 +1,8 @@
 # TODO — 10 people, one weekend
 
-Check a box only when the **acceptance** column is true. Put your name next to the workstream you own.
+**Live coordination is GitHub issues** ([board](https://github.com/pramodthe/idoctor-design/issues), snapshot [`COORDINATION.md`](../COORDINATION.md)). This file is the frozen weekend checklist. Open or close issues for new work; check a box here only when the **acceptance** note is true.
+
+Put your name next to the workstream you own.
 
 If you are blocked on a partner API, switch to the fixture in `spec/fixtures/` and keep moving. Do not sit idle.
 

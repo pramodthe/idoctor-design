@@ -24,7 +24,7 @@ iDoctor Design does the job a careful computational biologist would do on Monday
 
 1. **Read the record** — papers, clinical trials, drug databases, and PDB structures for how sotorasib fails
 2. **Write a spec** — structured mutations, pocket residues, failed small molecules, and success criteria (`spec.json`)
-3. **Design something new** — a miniprotein/peptide binder for the Switch II region under resistance constraints (Proto when available)
+3. **Design something new** — a miniprotein/peptide binder for the Switch II region under resistance constraints. **Live BindCraft on Tamarind** (RFdiffusion + ProteinMPNN + AF2 filters) only when a finished campaign is on disk; otherwise a labeled heuristic `sequence_design` or fixtures. Never present those fallbacks as RFdiffusion.
 4. **Test on a computer** — fold designs (Tamarind), dock known small molecules as a **control** (AutoDock Vina), compare WT vs mutant
 5. **Argue with itself** — promote / hold / reject with citations and metrics (Claude critic)
 6. **Propose a Monday experiment** — a one-page wet-lab markdown card (not a chat summary)
@@ -46,7 +46,7 @@ The backend is a **LangGraph** pipeline. Each node writes contract files into `d
 | Step | Agent (UI label) | What it produces |
 |------|------------------|------------------|
 | 1 | **Literature & databases (Paperclip)** | Resistance mutations + citations → `spec.json` |
-| 2 | **Sequence design (Proto)** | Candidate binders → `designs.json` + FASTA |
+| 2 | **Sequence design (BindCraft)** | Candidate binders → `designs.json` + FASTA |
 | 3 | **Fold & complex (Tamarind)** | Structure metrics (pLDDT / ipTM) → `structures/` |
 | 4 | **Docking control (AutoDock Vina)** | Known small mols on WT vs mutant → `smallmol.json` |
 | 5 | **Score vs experiment** | Spearman / residuals / disagreements → `eval.json` |
@@ -66,7 +66,9 @@ Any node may fall back to a **fixture** if a partner API is down, and mark `prov
 | `replay` | Reuse an existing `data/runs/<id>` with no partner calls |
 
 Without partner keys: Europe PMC + ClinicalTrials.gov, local `sequence_design`, heuristic folds.  
-With keys: Paperclip CLI, Tamarind folds, Claude critic, Proto + Modal when `USE_PROTO=1`.
+With keys: Paperclip CLI, Tamarind **folds**, Claude critic. **BindCraft (RFdiffusion + ProteinMPNN)** only if `data/bindcraft_designs/designs.json` exists from a finished Tamarind job. `USE_PROTO` is off. Do not claim a diffusion model ran on the heuristic path.
+
+Stage demo default is **`replay`** of a saved run (demo-data banner on).
 
 ---
 
@@ -107,7 +109,7 @@ flowchart TD
   experiment --> __end__
 
   evidence -. tools .-> t_paperclip["Paperclip / literature<br/>→ spec.json"]:::tool
-  designer -. tools .-> t_proto["Proto · Modal · sequence_design<br/>→ designs.json + FASTA"]:::tool
+  designer -. tools .-> t_design["Tamarind BindCraft if campaign on disk<br/>else sequence_design / fixture<br/>→ designs.json + FASTA"]:::tool
   structure -. tools .-> t_tam["Tamarind<br/>→ structures/"]:::tool
   physics -. tools .-> t_vina["AutoDock Vina · RDKit<br/>→ smallmol.json"]:::tool
   evaluate -. tools .-> t_oracle["evaluation.oracle<br/>→ eval.json"]:::tool
@@ -128,7 +130,7 @@ flowchart LR
   BE --> LG["LangGraph<br/>StateGraph above"]
   LG --> Runs[("data/runs/&lt;run_id&gt;/")]
   FE --> Runs
-  LG --> Partners["Paperclip · Proto/Modal<br/>Tamarind · Claude · Vina"]
+  LG --> Partners["Paperclip · Tamarind BindCraft/fold<br/>Claude · Vina"]
   Partners -.->|API down| FX["spec/fixtures/"]
   FX --> Runs
 ```
@@ -141,13 +143,14 @@ backend/
   main.py             FastAPI: /api/run, /api/runs/latest, SSE status
   pipeline.py         LangGraph of evidence → … → experiment
   agents/             evidence, designer, structure, physics, evaluator, critic, experiment
-  tools/              paperclip, tamarind, proto_runner, sequence_design, literature
+  tools/              paperclip, tamarind, sequence_design, literature (proto_runner leftover)
   evaluation/         oracle metrics (Spearman, residuals, WT–mutant delta)
   simulation/         Vina docking + PDB cache
-  contracts/          JSON schema validation
+  contracts/          JSON schema validation + Ryan novel_designs adapter
 frontend/             Trust UI (mutation map, designs, rejects, eval, experiment card)
-design/               Proto binder + KRAS G12C orchestrator
+design/               leftover Proto CLI — live designer is backend/agents/designer.py
 data/runs/            Per-run contract files (gitignored)
+data/bindcraft_designs/  Finished BindCraft campaign pickup (gitignored except .gitkeep)
 ```
 
 ### API (minimum)
@@ -155,6 +158,7 @@ data/runs/            Per-run contract files (gitignored)
 | Method | Path | Result |
 |--------|------|--------|
 | `POST` | `/api/run` | Start a run (`live` \| `replay` \| `fixture`) → `{ job_id }` |
+| `POST` | `/api/tamarind/validate-job` | Ryan `designspec.py` seam: `{type, settings}` → Tamarind-normalized settings (no submit) |
 | `GET` | `/api/run/{id}/status` | SSE / poll agent statuses |
 | `GET` | `/api/runs/latest` | Latest run folder as JSON |
 | `GET` | `/api/runs/{id}/file/{name}` | Raw contract file |
@@ -176,7 +180,7 @@ cd frontend && npm install && npm run build && npm run start -- -H 0.0.0.0 -p 30
 ```
 
 - **UI:** http://localhost:3000 — loads the **latest saved run** on boot  
-  (`?run=live` / `?run=fixture` / `?run=none` to override)
+  (`?run=replay` / `?run=live` / `?run=fixture` / `?run=none` to override)
 - **API:** http://localhost:8080/docs
 
 ### Live pipeline (CLI)
@@ -200,11 +204,10 @@ See `backend/.env.example`. Optional upgrades:
 | Variable | Purpose |
 |----------|---------|
 | `PAPERCLIP_API_KEY` | Literature / trials / databases |
-| `TAMARIND_API_KEY` | Fold & complex jobs |
+| `TAMARIND_API_KEY` | Fold/complex jobs, and BindCraft when a campaign is submitted |
 | `ANTHROPIC_API_KEY` | Critic + experiment prose |
-| `MODAL_TOKEN_*` + `USE_PROTO=1` | Proto on GPU |
 
-`IDOCTOR_DESIGN_DEFAULT_MODE` and `IDOCTOR_DESIGN_LIVE_DESIGN` control default mode and live design. Never commit `backend/.env`.
+`IDOCTOR_DESIGN_DEFAULT_MODE` (`fixture` / `live` / `replay`) and `IDOCTOR_DESIGN_LIVE_DESIGN` control default mode. Stage walkthrough: **replay**. Never commit `backend/.env`.
 
 ---
 
@@ -245,7 +248,8 @@ Acceptance checklist: [`spec/ACCEPTANCE.md`](./spec/ACCEPTANCE.md).
 | [`spec/ARCHITECTURE.md`](./spec/ARCHITECTURE.md) | Implementers |
 | [`spec/DATA_CONTRACTS.md`](./spec/DATA_CONTRACTS.md) | Shared JSON schemas |
 | [`spec/ACCEPTANCE.md`](./spec/ACCEPTANCE.md) | Demo / judging |
-| [`spec/runbooks/`](./spec/runbooks/) | Paperclip, Proto, Tamarind, live mode |
+| [`COORDINATION.md`](./COORDINATION.md) | Live team board (generated from GitHub issues) |
+| [`spec/runbooks/`](./spec/runbooks/) | Paperclip, Tamarind, live mode (Proto leftover) |
 
 ---
 

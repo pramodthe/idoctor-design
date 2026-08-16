@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""iDoctor Design entrypoint (Workstream 4).
+"""Leftover iDoctor Design CLI (Workstream 4, Proto era).
 
-Reads an iDoctor Design `spec.json`, writes `designs.json` + `designs.fasta`.
+Not the live designer. Live path is backend/agents/designer.py:
+BindCraft-from-disk → sequence_design → fixtures.
 
-Priority when `--live` / IDOCTOR_DESIGN_LIVE_DESIGN / live pipeline:
-1. **Proto** (proto_language binder program) when packages available or USE_PROTO=1
-2. Local `sequence_design` interim generator (`provenance: live`)
-3. Fixture designs (`provenance: fixture`) — never claim these as inventions
+This script still prefers Proto when USE_PROTO=1. Keep that flag off for the
+Sunday demo. Do not claim Proto/Modal ran from a pipeline click.
 """
 
 from __future__ import annotations

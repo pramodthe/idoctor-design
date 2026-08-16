@@ -86,12 +86,15 @@ export interface Design {
   pdb_path: string | null;
   novelty: { identity: number; method: string };
   provenance: string;
+  fold_method?: string | null;
+  generator?: string | null;
 }
 
 export interface DesignsPayload {
   schema_version?: string;
   score_direction?: string;
   designs: Design[];
+  meta?: { design_engine?: string; job_name?: string; engine?: string };
 }
 
 export interface SmallMolCompound {
@@ -200,7 +203,7 @@ export type AppState = "idle" | "running" | "completed";
 
 export const AGENT_DISPLAY_NAMES: Record<AgentName, string> = {
   evidence: "Literature & databases (Paperclip)",
-  designer: "Sequence design (Proto)",
+  designer: "Sequence design (BindCraft)",
   structure: "Fold & complex (Tamarind)",
   physics: "Docking control (AutoDock Vina)",
   evaluate: "Score vs experiment",

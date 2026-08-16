@@ -4,11 +4,15 @@ __pycache__/
 dist/
 build/
 .env
+.env.bak
+backend/.env.bak
 *.pdb
 data/pdb_cache/
 data/precomputed/
 venv/
 .venv/
+
+vendor/
 
 node_modules/
 .next/
@@ -34,3 +38,19 @@ data/validation/
 # iDoctor Design run artifacts (keep the folder)
 data/runs/*
 !data/runs/.gitkeep
+
+# Local logs and docking dumps — never commit the multi-MB pose files.
+logs/
+data/vina_*/
+data/receptors/
+data/docking/*
+# ...but the measured affinities are the reproducible result the physics node
+# reads, and they are 4 KB. Without this file nobody can rerun the eval.
+!data/docking/vina_scores.json
+
+# Designed binder output. The campaign scratch is bulky; the designs are the
+# scientific deliverable, so they ship.
+data/bindcraft_designs/*
+!data/bindcraft_designs/.gitkeep
+!data/bindcraft_designs/designs.json
+!data/bindcraft_designs/designs.fasta

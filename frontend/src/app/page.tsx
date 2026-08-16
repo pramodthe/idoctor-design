@@ -41,7 +41,7 @@ export default function Home() {
   const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [pdbData, setPdbData] = useState<string | null>(null);
   const [usedLocalFixtures, setUsedLocalFixtures] = useState(false);
-  const autoStarted = useRef(false);
+  const runGeneration = useRef(0);
 
   useEffect(() => {
     getProteinPDB(DEFAULT_PDB)
@@ -50,6 +50,7 @@ export default function Home() {
   }, []);
 
   const handleRun = useCallback(async (mode: RunMode) => {
+    const gen = ++runGeneration.current;
     setShowOnboarding(false);
     setAppState("running");
     setError(null);
@@ -62,42 +63,53 @@ export default function Home() {
       const res = await runWithFixtureFallback(
         mode,
         (agent, status) => {
+          if (gen !== runGeneration.current) return;
           setAgentStatus((prev) => {
             if (!(agent in prev)) return prev;
             return { ...prev, [agent]: status as AgentStatus };
           });
         },
-        (step) => setCurrentStep(step)
+        (step) => {
+          if (gen !== runGeneration.current) return;
+          setCurrentStep(step);
+        }
       );
+      if (gen !== runGeneration.current) return;
       if (res.provenance?.mode === "fixture") {
         setUsedLocalFixtures(true);
       }
       setResults(res);
       setAppState("completed");
     } catch (err) {
+      if (gen !== runGeneration.current) return;
       setError(err instanceof Error ? err.message : "Failed to run pipeline");
       setAppState("idle");
     }
   }, []);
 
-  // On first load: show the newest saved run (live with keys) instead of always
-  // re-running fixture — that made the computer view look "stuck" on the same demo.
-  // Overrides: ?run=live | ?run=fixture | ?run=none
+  // On first load: show the newest saved run instead of always re-running.
+  // Overrides: ?run=live | ?run=fixture | ?run=replay | ?run=none
+  // Use a cancelled flag so React Strict Mode remounts don't leave the UI stuck on idle.
   useEffect(() => {
-    if (autoStarted.current) return;
     if (typeof window === "undefined") return;
-    autoStarted.current = true;
+    let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const run = params.get("run");
     if (run === "none") return;
-    if (run === "live" || run === "fixture") {
+
+    if (run === "live" || run === "fixture" || run === "replay") {
       void handleRun(run);
-      return;
+      return () => {
+        cancelled = true;
+        runGeneration.current += 1;
+      };
     }
+
     void (async () => {
       setAppState("running");
       setCurrentStep("Loading latest run…");
       const latest = await loadLatestRun();
+      if (cancelled) return;
       if (latest) {
         setAgentStatus(
           Object.fromEntries(
@@ -114,6 +126,10 @@ export default function Home() {
       }
       void handleRun("fixture");
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [handleRun]);
 
   const handleReset = useCallback(() => {
@@ -222,8 +238,15 @@ export default function Home() {
                 <div className="mt-8 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={() => handleRun("fixture")}
+                    onClick={() => handleRun("replay")}
                     className="bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-800"
+                  >
+                    Replay latest
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRun("fixture")}
+                    className="border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 transition-colors hover:border-teal-600 hover:text-teal-900"
                   >
                     Run fixture
                   </button>
@@ -236,9 +259,11 @@ export default function Home() {
                   </button>
                 </div>
                 <p className="mt-3 text-[11px] text-slate-400">
-                  Fixture works offline from bundled JSON if the API is down.
-                  Live requires the iDoctor Design backend at{" "}
-                  <span className="font-mono">NEXT_PUBLIC_API_URL</span>.
+                  Stage default is <span className="font-mono">replay</span> of a
+                  saved run (demo-data banner on). Fixture works offline from
+                  bundled JSON. Live calls partners when keys exist — BindCraft
+                  is used only if a finished campaign is on disk; otherwise the
+                  engine column says heuristic, not RFdiffusion.
                 </p>
               </div>
             </section>
@@ -286,6 +311,7 @@ export default function Home() {
               <AgentStatusPanel
                 agentStatus={agentStatus}
                 currentStep={currentStep}
+                provenance={results?.provenance}
               />
             </div>
           </div>
@@ -381,6 +407,7 @@ export default function Home() {
                   designs={results.designs?.designs || []}
                   verdicts={results.verdicts?.items || []}
                   deltas={results.eval?.design_deltas}
+                  designEngine={results.designs?.meta?.design_engine || results.designs?.meta?.engine}
                 />
                 <div className="mt-6">
                   <RejectDrawer

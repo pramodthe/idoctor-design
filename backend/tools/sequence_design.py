@@ -1,7 +1,12 @@
-"""Local live sequence design generator for iDoctor Design (interim until Proto/Modal).
+"""Local live sequence design generator for iDoctor Design
+(interim until a Tamarind BindCraft campaign is on disk).
 
 Produces novel, deterministic binder sequences seeded from mutation ids + pocket
 residues so re-runs are stable but not identical to fixture FASTAs.
+
+This is a heuristic assembler, not RFdiffusion / ProteinMPNN / BindCraft.
+Callers must stamp meta.design_engine=sequence_design and must not present
+these sequences as a diffusion-model run.
 """
 
 from __future__ import annotations
@@ -228,7 +233,8 @@ def generate_designs(scientific_spec: dict[str, Any], n: int = 8) -> dict[str, A
                 "provenance": "live",
                 "notes": (
                     "Local live generator — pocket-biased motifs (Tyr/His/Asp/Cys-aware). "
-                    "Not Proto/Modal; fold metrics are heuristic_v1 until Tamarind/Proto run."
+                    "Not BindCraft/RFdiffusion; fold metrics are heuristic_v1 until a "
+                    "Tamarind fold or BindCraft campaign runs."
                 ),
             }
         )

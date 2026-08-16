@@ -53,15 +53,15 @@ The evidence agent turns the public scientific record into `spec.json`.
 
 ---
 
-## 3. Design agent (Proto + Modal)
+## 3. Design agent (Tamarind BindCraft)
 
 | ID | Requirement | Acceptance |
 |---|---|---|
-| DS-1 | **P0.** A Proto program reads `spec.json` and designs miniprotein or peptide candidates for the Switch II / G12C pocket under the resistance constraints. | `designs.json` contains ≥1 sequence after a successful run; Saturday night target is ≥10. |
+| DS-1 | **P0.** Design miniprotein/peptide candidates for the Switch II / G12C pocket under resistance constraints. **Preferred live engine:** Tamarind BindCraft (RFdiffusion + ProteinMPNN + AF2 filters) from a finished campaign on disk. | `designs.json` contains ≥1 sequence after a successful run. `meta.design_engine` is `bindcraft`, `sequence_design`, or `fixture`. |
 | DS-2 | **P0.** Each design records sequence, length, generator/constraint scores, and a run id. | No design is only a pretty picture. FASTA + JSON both exist. |
-| DS-3 | **P1.** Constraints include (as far as Proto allows this weekend): bind the specified region, remain plausible as a fold, and do not ignore listed resistance residues. | Constraint names and scores are in `designs.json`. |
-| DS-4 | **P0.** Modal GPU is used for Proto (or documented CPU fallback). Vina must not be moved onto Modal as a blocker. | README/spec notes this. Proto runbook exists. |
-| DS-5 | **P0.** If Proto/Modal fail, load `spec/fixtures/designs.example.json` and mark provenance fixture. | Demo still has sequences on screen. |
+| DS-3 | **P1.** Constraints include (as far as BindCraft/spec allow): bind the specified region, remain plausible as a fold, and do not ignore listed resistance residues. | Constraint names and scores are in `designs.json`. |
+| DS-4 | **P0.** GPU design jobs run on **Tamarind**, not Modal Proto. BindCraft is a multi-hour job and is not called inline per UI click. | README/spec notes this. No `USE_PROTO=1` required for the demo. |
+| DS-5 | **P0.** If no BindCraft campaign is on disk, use local `sequence_design` (labeled heuristic) then `spec/fixtures/designs.example.json` with `provenance=fixture`. | Demo still has sequences. UI engine column must not say BindCraft for those rows. |
 | DS-6 | **P1.** Designs are tagged `novel_unverified` until the eval agent checks PDB similarity. | Critic can reject on novelty. |
 
 ---
@@ -102,7 +102,7 @@ This is the docking control arm (legacy physics stack), pointed at KRAS, used as
 | CR-4 | **P1.** Reject reasons must be one of a controlled list plus free text: `wt_only_signal`, `too_similar_to_pdb`, `low_structure_confidence`, `contradicts_literature`, `promiscuous_or_pains`, `weak_or_missing_metric`, `other`. | UI can filter the reject pile by reason. |
 | CR-5 | **P0.** LLM is Claude (Anthropic API). Template critic if the key is unset. | Model name appears in traces. |
 | CR-6 | **P1.** Hypothesis is explicit and falsifiable, e.g. “small-molecule Switch II binders lose affinity on Y96D; a larger designed binder can retain contacts outside the sotorasib epitope.” | Hypothesis string is on the home screen during a run. |
-| CR-7 | **P1.** Traces include tool calls (Paperclip queries, Proto, Tamarind job ids, Vina) with timing. | A judge can expand “what did you do.” |
+| CR-7 | **P1.** Traces include tool calls (Paperclip queries, Tamarind job ids, Vina) with timing. | A judge can expand “what did you do.” |
 
 ---
 
@@ -112,7 +112,7 @@ This is the docking control arm (legacy physics stack), pointed at KRAS, used as
 |---|---|---|
 | EL-1 | **P0.** For small molecules with `known_ki_nm`, compute pKi = 9 - log10(Ki_nM), Spearman ρ vs Vina (note Vina is more negative = better, so compare to −Vina). | Number shown; if n < 5, show “n too small” instead of a fake ρ. |
 | EL-2 | **P0.** Disagreement table: large residual between docking rank and Ki rank. | At least the worst 3 shown. |
-| EL-3 | **P1.** For designs: WT vs mutant score delta (Vina, Tamarind interface score, or Proto constraint — whichever exists). Promote path should not be WT-only. | Verdict uses this when present. |
+| EL-3 | **P1.** For designs: WT vs mutant score delta (Vina, Tamarind interface score, or BindCraft metric — whichever exists). Promote path should not be WT-only. | Verdict uses this when present. |
 | EL-4 | **P1.** Novelty: sequence identity vs known PDB/UniProt binders if a search is available; otherwise a Paperclip/PDB text check. | `novelty.identity` or `novelty.method = "unchecked_fixture"`. |
 | EL-5 | **P2.** Enrichment of true actives (Ki below a stated cutoff) in Vina top-k. | Optional chart. |
 
@@ -149,10 +149,10 @@ This is the docking control arm (legacy physics stack), pointed at KRAS, used as
 |---|---|---|
 | NF-1 | **P0.** FastAPI + Next.js remain the app shell. New agents live under `backend/agents/` and `backend/tools/`. | Existing `uvicorn` / `npm run dev` still start. |
 | NF-2 | **P0.** Bind HTTP to `0.0.0.0` and `$PORT` if deployed; local default backend `8080`, frontend `3000`. | Matches current repo. |
-| NF-3 | **P0.** Secrets only in env: `ANTHROPIC_API_KEY`, `PAPERCLIP_*`, `TAMARIND_API_KEY`, `MODAL_*`. Never commit keys. Benchling not used. | `.env` gitignored. |
+| NF-3 | **P0.** Secrets only in env: `ANTHROPIC_API_KEY`, `PAPERCLIP_*`, `TAMARIND_API_KEY`. Never commit keys. `USE_PROTO` stays off. Benchling not used. | `.env` gitignored. |
 | NF-4 | **P0.** A run is a folder `data/runs/<run_id>/` with the contract files. Live demo can point at the latest successful folder. | `GET /api/runs/latest` returns it. |
-| NF-5 | **P1.** One-command replay: load latest run without calling partners. | `POST /api/run` with `{ "mode": "replay" }`. |
-| NF-6 | **P1.** Timeouts: Paperclip 120s, Proto 20 min, Tamarind poll up to 30 min, Vina per ligand as today. UI stays in “running” with step text. | No silent hang. |
+| NF-5 | **P1.** One-command replay: load latest run without calling partners. Stage walkthrough uses this. | `POST /api/run` with `{ "mode": "replay" }`. |
+| NF-6 | **P1.** Timeouts: Paperclip 120s, Tamarind fold poll up to 30 min, BindCraft campaign hours (not inline), Vina per ligand as today. UI stays in “running” with step text. | No silent hang. |
 | NF-7 | **P0.** No special GPU required. Skip MD if Vina scores exist. | Pipeline completes on a laptop with fixtures + cached Vina. |
 
 ---
@@ -179,7 +179,7 @@ See `TODO.md` for owners. Quick map:
 |---|---|
 | 1 Scientific lead | PR-*, SC-*, CR-6 |
 | 2–3 Paperclip | EV-* |
-| 4 Proto | DS-* |
+| 4 Design (BindCraft) | DS-* |
 | 5 Tamarind | ST-* |
 | 6 Physics control | PH-*, EL-1, EL-2 |
 | 7 Critic | CR-*, EL-3, EL-4 |

@@ -1,11 +1,17 @@
 "use client";
 
-import type { AgentStatusMap, AgentName } from "@/lib/types";
+import type {
+  AgentStatusMap,
+  AgentName,
+  ProvenancePayload,
+} from "@/lib/types";
 import { AGENT_DISPLAY_NAMES } from "@/lib/types";
 
 interface AgentStatusPanelProps {
   agentStatus: AgentStatusMap;
   currentStep?: string | null;
+  /** Per-node live/fixture/cached stamps — drives the demo-data banner. */
+  provenance?: ProvenancePayload;
 }
 
 const AGENT_KEYS: AgentName[] = [
@@ -20,7 +26,8 @@ const AGENT_KEYS: AgentName[] = [
 
 const DESCRIPTIONS: Record<AgentName, string> = {
   evidence: "Paperclip → mutation table and scientific spec",
-  designer: "Proto → sequences under resistance constraints",
+  designer:
+    "BindCraft on Tamarind if a finished campaign is on disk; else heuristic sequence_design — not RFdiffusion unless provenance says bindcraft",
   structure: "Tamarind → fold and complex confidence",
   physics: "AutoDock Vina → small-molecule control arm",
   evaluate: "Compare docking ranks to known Ki",
@@ -31,11 +38,19 @@ const DESCRIPTIONS: Record<AgentName, string> = {
 export default function AgentStatusPanel({
   agentStatus,
   currentStep,
+  provenance,
 }: AgentStatusPanelProps) {
   const completedCount = Object.values(agentStatus).filter(
     (s) => s === "completed"
   ).length;
   const progress = (completedCount / AGENT_KEYS.length) * 100;
+  const nodeVals = Object.values(provenance?.nodes || {});
+  const hasFixtureNode = nodeVals.some((n) => n === "fixture");
+  const isDemo =
+    !provenance ||
+    provenance.mode === "fixture" ||
+    provenance.mode === "replay" ||
+    hasFixtureNode;
 
   return (
     <div className="border border-slate-200 bg-white p-5">
@@ -56,6 +71,23 @@ export default function AgentStatusPanel({
           <div className="shimmer-bar absolute inset-0" />
         </div>
       </div>
+
+      {isDemo && (
+        <div className="demo-banner mb-4 border-2 border-amber-500 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-950">
+          Demo data / fixture provenance
+          {provenance ? (
+            <>
+              {" "}
+              — mode{" "}
+              <span className="font-mono">{provenance.mode}</span>
+              {hasFixtureNode && " (one or more nodes are fixture)"}. Do not
+              treat heuristic folds or sequence_design as RFdiffusion/BindCraft.
+            </>
+          ) : (
+            <> — provenance not loaded yet.</>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1.5">
         {AGENT_KEYS.map((key) => {

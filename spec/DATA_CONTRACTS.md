@@ -87,7 +87,9 @@ Required top-level keys:
 
 ## `designs.json`
 
-Produced by Proto; structure agent may patch metrics onto the same file (or write `structures` into each design).
+Produced by the designer (`backend/agents/designer.py`): BindCraft campaign on disk if present, else local `sequence_design`, else fixtures. Structure agent may patch metrics onto the same file.
+
+`meta.design_engine` is required for honesty: `bindcraft` | `sequence_design` | `fixture` | `cached`. The UI Engine column reads this. Do not omit it.
 
 See [`fixtures/designs.example.json`](./fixtures/designs.example.json).
 
@@ -106,6 +108,10 @@ Each `designs[]` item:
 | `pdb_path` | string or null |
 | `novelty` | object or null |
 | `provenance` | `live` \| `fixture` |
+| `fold_method` | optional string (`bindcraft:af2`, `heuristic_v1`, Tamarind tool name) |
+| `generator` | optional string (`tamarind:bindcraft`, `sequence_design.local`) |
+
+Top-level `meta.design_engine` stamps which generator actually ran.
 
 `designs.fasta` is the same sequences in FASTA, headers `>des_001`.
 
@@ -210,6 +216,34 @@ Array of agent traces. Reuse the spirit of the old `AgentTrace` type:
   "steps": [{ "action": "...", "detail": "..." }],
   "tool_calls": [{ "tool": "paperclip.search", "detail": "..." }]
 }
+```
+
+---
+
+## `novel_designs.json` (Ryan / `TherapeuticPlan` seam)
+
+Hand-off into `idoctor-engine` therapy rung 3. Additive keys only; `proto_run_id` is kept even when the job ran on Tamarind BindCraft (do not rename it).
+
+See [`fixtures/novel_designs.example.json`](./fixtures/novel_designs.example.json). Built by `backend/contracts/novel_designs.py` from `designs.json` + `verdicts.json` + `experiment.md`.
+
+Each `novel_designs[]` item:
+
+| Key | Type | Notes |
+|---|---|---|
+| `modality` | string | `miniprotein` or `peptide` |
+| `target` | string | Gene + PDB + pocket from `spec.json` |
+| `sequence` | string | |
+| `metrics` | object | `ipTM`, `pLDDT`, `boltz2_affinity` (null if unmeasured — never invented) |
+| `proto_run_id` | string | Tamarind job name, or `idoctor-design:<run_id>:<design_id>` |
+| `wetlab_protocol` | string or null | Path to `experiment.md` in the run folder |
+| `caveat` | string | Always includes `in-silico only; predicted, not measured` |
+
+Only critic `promote` / `hold` designs are exported. Rejects stay in `verdicts.json`. If `bridge.py` sends a splice/HBB or HFE/ferroportin brief, `refused[]` is filled and `novel_designs` is empty.
+
+```bash
+PYTHONPATH=. python -m backend.contracts.novel_designs --fixtures
+PYTHONPATH=. python -m backend.contracts.novel_designs --run-dir data/runs/<id>
+PYTHONPATH=. python -m backend.contracts.novel_designs --brief brief.json --fixtures
 ```
 
 ---

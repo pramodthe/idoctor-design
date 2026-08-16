@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from backend.config import PAPERCLIP_API_KEY, PAPERCLIP_BASE_URL
 from backend.tools import literature
+
 
 
 class PaperclipUnavailable(RuntimeError):
@@ -29,8 +32,74 @@ def is_configured() -> bool:
     return bool(PAPERCLIP_API_KEY)
 
 
+def _paperclip_bin() -> str | None:
+    """Resolve paperclip binary (PATH or common installer locations)."""
+    found = shutil.which("paperclip")
+    if found:
+        return found
+    for candidate in (
+        Path.home() / ".local" / "bin" / "paperclip",
+        Path.home() / ".paperclip" / "bin" / "paperclip",
+    ):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
 def _cli_available() -> bool:
-    return shutil.which("paperclip") is not None
+    return _paperclip_bin() is not None
+
+
+def _parse_paperclip_cli_text(out: str, query: str) -> dict[str, Any]:
+    """Parse human-readable `paperclip search` stdout into a structured payload."""
+    results: list[dict[str, Any]] = []
+    search_id = None
+    m_sid = re.search(r"\[(s_[a-f0-9]+)\]", out)
+    if m_sid:
+        search_id = m_sid.group(1)
+
+    # Blocks like:
+    #   1. Title...
+    #      Authors...
+    #      PMC9170150 · Journal · 2022-04-26
+    #      https://...
+    #      "snippet"
+    block_re = re.compile(
+        r"^\s*(\d+)\.\s+(.*?)\n"
+        r"\s+([^\n]+)\n"
+        r"\s+((?:PMC|PMID|NCT)[^\n·]*?)\s*·\s*([^\n]+?)\s*·\s*([^\n]+)\n"
+        r"(?:\s+(https?://[^\n]+)\n)?"
+        r"(?:\s+\"([^\"]*)\")?",
+        re.MULTILINE,
+    )
+    for m in block_re.finditer(out):
+        doc_id = m.group(4).strip()
+        results.append(
+            {
+                "rank": int(m.group(1)),
+                "title": re.sub(r"\s+", " ", m.group(2)).strip(),
+                "authors": m.group(3).strip(),
+                "id": doc_id,
+                "venue": m.group(5).strip(),
+                "date": m.group(6).strip(),
+                "url": (m.group(7) or "").strip() or None,
+                "snippet": (m.group(8) or "").strip() or None,
+            }
+        )
+
+    # Fallback: scoop any PMC/PMID/NCT tokens if block parse missed
+    if not results:
+        for doc_id in re.findall(r"\b(PMC\d+|PMID:?\s*\d+|NCT\d+)\b", out, flags=re.I):
+            results.append({"id": doc_id.replace(" ", ""), "title": None})
+
+    return {
+        "query": query,
+        "search_id": search_id,
+        "source": "paperclip_cli",
+        "n_results": len(results),
+        "results": results,
+        "raw_text": out if not results else None,
+    }
 
 
 def search(query: str, **kwargs: Any) -> dict[str, Any] | None:
@@ -44,20 +113,29 @@ def search(query: str, **kwargs: Any) -> dict[str, Any] | None:
             "Install from https://paperclip.gxl.ai/docs or use literature fallback."
         )
 
-    if not _cli_available():
+    paperclip_bin = _paperclip_bin()
+    if not paperclip_bin:
         raise PaperclipUnavailable(
             "Paperclip CLI not installed. "
             "Run: curl -fsSL https://paperclip.gxl.ai/install.sh | bash "
             "Then set PAPERCLIP_API_KEY. (There is no custom REST API URL to fill in.)"
         )
 
-    timeout = kwargs.get("timeout", 60)
-    cmd = ["paperclip"]
+    timeout = kwargs.get("timeout", 90)
+    # Current CLI requires -s/--source (pmc, trials/us, …).
+    sources = kwargs.get("sources") or os.environ.get(
+        "PAPERCLIP_SOURCES", "pmc,biorxiv,medrxiv,trials/us"
+    )
+    limit = int(kwargs.get("limit") or os.environ.get("PAPERCLIP_SEARCH_LIMIT", "20"))
+    cmd = [paperclip_bin]
     if PAPERCLIP_API_KEY:
         cmd.extend(["--api-key", PAPERCLIP_API_KEY])
-    cmd.extend(["search", query])
+    cmd.extend(["search", "-s", str(sources), "-n", str(limit), query])
 
     env = os.environ.copy()
+    # Ensure installer path stays visible to any child tools.
+    local_bin = str(Path.home() / ".local" / "bin")
+    env["PATH"] = local_bin + os.pathsep + env.get("PATH", "")
     if PAPERCLIP_API_KEY:
         env["PAPERCLIP_API_KEY"] = PAPERCLIP_API_KEY
     if PAPERCLIP_BASE_URL:
@@ -83,9 +161,14 @@ def search(query: str, **kwargs: Any) -> dict[str, Any] | None:
         raise PaperclipUnavailable("Paperclip CLI returned empty stdout.")
 
     try:
-        return json.loads(out)
+        parsed = json.loads(out)
+        if isinstance(parsed, dict):
+            parsed.setdefault("query", query)
+            parsed.setdefault("source", "paperclip_cli_json")
+            return parsed
     except json.JSONDecodeError:
-        return {"raw_text": out, "query": query}
+        pass
+    return _parse_paperclip_cli_text(out, query)
 
 
 def fetch_spec_candidate(query: str = "KRAS G12C sotorasib resistance") -> dict[str, Any] | None:

@@ -38,7 +38,7 @@ export default function Header({ appState }: { appState: AppState }) {
 
         <div className="flex items-center gap-3">
           <div className="hidden items-center gap-1.5 sm:flex">
-            {["Paperclip", "Proto", "Claude"].map((tag) => (
+            {["Paperclip", "Tamarind", "Claude"].map((tag) => (
               <span
                 key={tag}
                 className="border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500"

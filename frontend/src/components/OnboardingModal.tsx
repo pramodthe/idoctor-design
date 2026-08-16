@@ -38,7 +38,9 @@ export default function OnboardingModal({ onDismiss }: OnboardingModalProps) {
             G12C versus the mutant.
           </p>
           <p>
-            If partner APIs are down, run on fixture data; the demo-data banner will say so.
+            If partner APIs are down, run fixture or replay; the demo-data
+            banner (className demo-banner) will say so. Do not treat heuristic
+            sequence_design as RFdiffusion.
           </p>
         </div>
 

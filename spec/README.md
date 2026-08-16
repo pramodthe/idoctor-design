@@ -12,7 +12,7 @@ The agent:
 
 1. Reads papers, trials, and databases (Paperclip)
 2. Writes a design spec a scientist can inspect
-3. Designs a new protein/peptide binder (Proto)
+3. Designs a new protein/peptide binder (Tamarind BindCraft when a campaign is on disk; otherwise labeled heuristic `sequence_design` or fixtures — never presented as RFdiffusion)
 4. Tests designs (Tamarind + existing docking)
 5. Is allowed to **reject** its own work
 6. Hands a wet-lab person a Monday experiment (**markdown** card; Benchling unused)
@@ -27,12 +27,12 @@ Read in this order:
 |---|---|---|
 | 1 | [PROJECT_BRIEF.md](./PROJECT_BRIEF.md) | Everyone. Plain language. What we are building and why. |
 | 2 | [REQUIREMENTS.md](./REQUIREMENTS.md) | Product + engineering. Numbered, testable rules. |
-| 3 | [TODO.md](./TODO.md) | The 10-person weekend. Checkboxes by workstream. |
+| 3 | [TODO.md](./TODO.md) + [GitHub issues](https://github.com/pramodthe/idoctor-design/issues) | Weekend checklist (frozen) + **live coordination board**. |
 | 4 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Implementers. How the pieces connect. |
 | 5 | [DATA_CONTRACTS.md](./DATA_CONTRACTS.md) | Every Cursor window. Shared JSON files. **Read this before writing code.** |
 | 6 | [ACCEPTANCE.md](./ACCEPTANCE.md) | Demo + judging. How we know it is done. |
 
-Example payloads live in [`fixtures/`](./fixtures/). UI, critic, and eval teams must build against these files on Saturday morning **before** Paperclip or Proto return real data.
+Example payloads live in [`fixtures/`](./fixtures/). UI, critic, and eval teams must build against these files on Saturday morning **before** Paperclip or BindCraft return real data.
 
 ## Rules for vibe coding
 
@@ -41,7 +41,7 @@ Example payloads live in [`fixtures/`](./fixtures/). UI, critic, and eval teams 
 3. Every promote/reject needs a citation or a metric.
 4. Teams share files from `DATA_CONTRACTS.md`, not private schemas.
 5. If a partner API is down, load the matching fixture and keep going.
-6. Check a box in `TODO.md` only when the acceptance note is true.
+6. Check a box in `TODO.md` / close the GitHub issue only when the acceptance note is true. Live coordination is the issue board (`COORDINATION.md` is a generated snapshot).
 
 ## What we keep from the old repo
 

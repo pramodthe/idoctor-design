@@ -62,5 +62,9 @@
       "novelty": { "identity": 0.25, "method": "unchecked_fixture" },
       "provenance": "fixture"
     }
-  ]
+  ],
+  "meta": {
+    "engine": "fixture",
+    "design_engine": "fixture"
+  }
 }

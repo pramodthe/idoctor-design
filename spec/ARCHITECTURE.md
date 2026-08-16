@@ -30,8 +30,8 @@ Keep the Vina/RDKit/viewer code. Do not keep this as the user-facing story.
               ┌───────────┴───────────┐
               ▼                       ▼
        ┌────────────┐          ┌────────────┐
- Proto │   Design   │          │  Physics   │  existing Vina
- Modal └─────┬──────┘          │  control   │  WT + mutant
+BindCraft│   Design  │          │  Physics   │  existing Vina
+Tamarind └─────┬─────┘          │  control   │  WT + mutant
               ▼                └─────┬──────┘
        ┌────────────┐                │
 Tamarind│ Structure │                │
@@ -70,7 +70,8 @@ backend/
   tools/
     paperclip.py
     tamarind.py
-    proto_runner.py
+    sequence_design.py   # heuristic fallback — not RFdiffusion
+    proto_runner.py      # leftover; not the live designer
   agents/
     evidence.py
     designer.py
@@ -87,8 +88,8 @@ frontend/
   src/app/page.tsx        # four-pane Trust UI (loads /api/runs/latest on boot)
   src/components/         # MutationMap, DesignTable, RejectDrawer, ExperimentCard, EvalPanel
 design/
-  kras_g12c.py            # Design orchestrator
-  proto_binder.py         # Proto RFdiffusion3 + ProteinMPNN + Boltz2 ipTM
+  kras_g12c.py            # leftover Proto-era orchestrator — not the live path
+  proto_binder.py         # leftover Proto program — designer.py does not call this
 data/
   runs/<run_id>/          # contract files + caches (gitignored)
 spec/                     # this folder — source of truth
@@ -116,7 +117,7 @@ spec/                     # this folder — source of truth
 | Graph node | Show the user | Never show |
 |---|---|---|
 | evidence | Literature & databases (Paperclip) | Target Analyst magic |
-| designer | Sequence design (Proto) | — |
+| designer | Sequence design (BindCraft) | BindCraft only if `data/bindcraft_designs/designs.json` exists; else heuristic / fixture. Never show “RFdiffusion” for those fallbacks. |
 | structure | Fold & complex (Tamarind) | — |
 | physics | Docking control (AutoDock Vina) | Molecular dynamics as the pitch |
 | evaluate | Score vs experiment | — |
@@ -158,7 +159,7 @@ The UI’s source of truth is this folder, not React state invented during the r
 
 ## Security / secrets
 
-Environment only. Document keys in `backend/.env.example`. Paperclip, Anthropic, Tamarind, Modal. (Benchling unused.)
+Environment only. Document keys in `backend/.env.example`. Paperclip, Anthropic, Tamarind. Modal/Proto leftover (`USE_PROTO=0`). Benchling unused.
 
 Do not log full API keys. Do not paste secrets into `spec/` or GitHub issues.
 

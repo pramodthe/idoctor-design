@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Weekend checklist (frozen)
+    url: https://github.com/pramodthe/idoctor-design/blob/main/spec/TODO.md
+    about: Original 10-person Saturday/Sunday checklist. Live work lives in GitHub issues.

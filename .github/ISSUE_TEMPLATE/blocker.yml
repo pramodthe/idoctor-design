@@ -1,0 +1,37 @@
+name: Blocker
+description: Something that stops a workstream. Shows at the top of the coordination dashboard.
+title: "[blocker] "
+labels: ["blocker"]
+body:
+  - type: dropdown
+    id: workstream
+    attributes:
+      label: Who is blocked
+      options:
+        - ws1 Scientific lead
+        - ws2 Paperclip evidence
+        - ws4 Proto design
+        - ws5 Tamarind structures
+        - ws6 Physics control
+        - ws7 Critic + LangGraph
+        - ws8 Trust UI
+        - ws9 Eval + novelty
+        - ws10 Demo + recording
+        - whole team
+    validations:
+      required: true
+  - type: textarea
+    id: stuck
+    attributes:
+      label: What is stuck
+      placeholder: Live Paperclip map/reduce cannot run until the on-site redeem.
+    validations:
+      required: true
+  - type: textarea
+    id: fallback
+    attributes:
+      label: Fixture / workaround
+      description: If a partner API is down, name the fixture and keep moving.
+      placeholder: Using spec/fixtures/spec.example.json. Provenance marked fixture.
+    validations:
+      required: true

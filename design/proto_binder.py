@@ -1,15 +1,11 @@
-"""KRAS G12C Proto binder program (RFdiffusion3 + ProteinMPNN + ipTM).
+"""KRAS G12C Proto binder program (leftover — not the live designer).
+
+Live path: backend/agents/designer.py (Tamarind BindCraft on disk →
+sequence_design → fixtures). This module is kept for the unused Proto/Modal
+stack. USE_PROTO stays 0. Do not claim this ran unless you invoked it.
 
 Follows the official Proto binder-design pattern:
 https://proto.evodesign.org/docs/language/guides/examples/binder-design
-
-Requires:
-  pip install git+https://github.com/evo-design/proto-tools.git
-  git clone https://github.com/evo-design/proto-language.git && pip install -e ./proto-language
-  pip install modal && modal setup   # GPU via Modal credits at re:AGENT
-
-When Proto/Modal is unavailable, callers must fall back to sequence_design / fixtures
-and must not claim Modal Proto succeeded.
 """
 
 from __future__ import annotations

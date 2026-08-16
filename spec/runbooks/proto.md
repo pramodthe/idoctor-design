@@ -1,4 +1,8 @@
-# Proto + Modal runbook
+# Proto + Modal runbook (leftover — not the live designer)
+
+The live design node is Tamarind BindCraft via `backend/agents/designer.py`.
+This runbook remains only for the unused Proto/Modal stack. `USE_PROTO` stays `0`.
+Do not present Proto output as the Sunday demo.
 
 Hackathon install: https://proto.evodesign.org/docs/hackathon
 

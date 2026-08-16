@@ -1,0 +1,42 @@
+name: Workstream
+description: A unit of work. GitHub issues are the coordination document.
+title: "[ws?] "
+labels: []
+body:
+  - type: dropdown
+    id: workstream
+    attributes:
+      label: Workstream
+      options:
+        - ws1 Scientific lead
+        - ws2 Paperclip evidence
+        - ws4 Proto design
+        - ws5 Tamarind structures
+        - ws6 Physics control
+        - ws7 Critic + LangGraph
+        - ws8 Trust UI
+        - ws9 Eval + novelty
+        - ws10 Demo + recording
+        - shared engineering
+    validations:
+      required: true
+  - type: textarea
+    id: done_when
+    attributes:
+      label: Done when
+      description: Acceptance note. Close this issue only when this is true.
+      placeholder: A stranger can read PROJECT_BRIEF.md + fixture spec.json and know what win means.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Files you own, partner dependency, fixture fallback.
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        After opening, add the matching label (`ws1`…`ws10`) and assign yourself when you start.
+        Do not start a parallel status doc — comment here.

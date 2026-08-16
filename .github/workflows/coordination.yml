@@ -1,0 +1,52 @@
+name: Coordination
+
+# GitHub issues are the live coordination document.
+# This job rebuilds the dashboard (COORDINATION.md + pinned issue) from them.
+on:
+  schedule:
+    - cron: "*/15 * * * *" # every 15 minutes, UTC
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled, assigned, unassigned]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: coordination-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.issue.labels.*.name, 'coordination')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync coordination document
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/sync_coordination.py --publish
+
+      - name: Commit snapshot if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add COORDINATION.md
+          if git diff --cached --quiet; then
+            echo "COORDINATION.md unchanged"
+          else
+            git commit -m "chore: refresh coordination document from GitHub issues"
+            git push
+          fi
