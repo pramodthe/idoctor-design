@@ -55,6 +55,13 @@ class RunRequest(BaseModel):
     run_id: str | None = None
 
 
+class TamarindJobSpec(BaseModel):
+    """Ryan's designspec.py seam: same body as Tamarind POST /validate-job."""
+
+    type: str
+    settings: dict
+
+
 class RunResponse(BaseModel):
     job_id: str
     status: str
@@ -286,6 +293,26 @@ async def dock_single(pdb_id: str, compound_id: str):
     return result
 
 
+@app.post("/api/tamarind/validate-job")
+async def validate_tamarind_job(spec: TamarindJobSpec):
+    """Validate a `{type, settings}` job against live Tamarind. Does not submit."""
+    from backend.tools.tamarind import TamarindUnavailable, is_configured, validate_job_spec
+
+    if not is_configured():
+        raise HTTPException(status_code=503, detail="TAMARIND_API_KEY not set")
+    try:
+        normalized = await asyncio.to_thread(validate_job_spec, spec.type, spec.settings)
+    except TamarindUnavailable as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"valid": True, "type": spec.type, "normalized": normalized}
+
+
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "idoctor-design"}
+    from backend.tools.tamarind import is_configured as tamarind_configured
+
+    return {
+        "status": "ok",
+        "service": "idoctor-design",
+        "tamarind_configured": tamarind_configured(),
+    }

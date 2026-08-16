@@ -148,6 +148,26 @@ def validate_verdicts(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def validate_novel_designs(data: dict[str, Any]) -> dict[str, Any]:
+    _require(data, ["schema_version", "novel_designs"], "novel_designs.json")
+    if not isinstance(data["novel_designs"], list):
+        raise ValueError("novel_designs.json novel_designs must be an array")
+    for i, item in enumerate(data["novel_designs"]):
+        _require(
+            item,
+            ["modality", "target", "sequence", "metrics", "proto_run_id", "caveat"],
+            f"novel_designs.json novel_designs[{i}]",
+        )
+        metrics = item["metrics"]
+        if not isinstance(metrics, dict) or "ipTM" not in metrics or "pLDDT" not in metrics:
+            raise ValueError(f"novel_designs.json novel_designs[{i}] metrics need ipTM and pLDDT")
+        if "boltz2_affinity" not in metrics:
+            raise ValueError(
+                f"novel_designs.json novel_designs[{i}] metrics.boltz2_affinity required (null ok)"
+            )
+    return data
+
+
 def validate_provenance(data: dict[str, Any]) -> dict[str, Any]:
     _require(data, ["run_id", "mode", "nodes", "created_at"], "provenance.json")
     if data["mode"] not in {"live", "replay", "fixture"}:

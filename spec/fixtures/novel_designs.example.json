@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0",
+  "case_id": null,
+  "source": "idoctor-design",
+  "generator": "tamarind:bindcraft",
+  "refused": [],
+  "novel_designs": [
+    {
+      "name": "des_001",
+      "modality": "miniprotein",
+      "target": "KRAS G12C (KRAS, 6OIM, Cys12,Asp69,His95,Tyr96)",
+      "sequence": "GSHMASGGSGSGSGSGSGSDDEEELLKKLKEELKKLKEELKKLGGS",
+      "metrics": {
+        "ipTM": 0.71,
+        "pLDDT": 82.1,
+        "boltz2_affinity": null,
+        "i_pAE": null
+      },
+      "proto_run_id": "idoctor-design:fixture:des_001",
+      "generator": "fixture",
+      "wetlab_protocol": "experiment.md",
+      "caveat": "in-silico only; predicted, not measured. Fixture sequence \u2014 do not present as a live invention.",
+      "verdict": "promote",
+      "provenance": "fixture"
+    },
+    {
+      "name": "des_005",
+      "modality": "miniprotein",
+      "target": "KRAS G12C (KRAS, 6OIM, Cys12,Asp69,His95,Tyr96)",
+      "sequence": "GSSHHHHHHSSGLVPRGSHMEEELKKLGEEELKKLGEEELKKLGGSGGS",
+      "metrics": {
+        "ipTM": 0.66,
+        "pLDDT": 75.5,
+        "boltz2_affinity": null,
+        "i_pAE": null
+      },
+      "proto_run_id": "idoctor-design:fixture:des_005",
+      "generator": "fixture",
+      "wetlab_protocol": "experiment.md",
+      "caveat": "in-silico only; predicted, not measured. Fixture sequence \u2014 do not present as a live invention.",
+      "verdict": "hold",
+      "provenance": "fixture"
+    }
+  ],
+  "therapy": {
+    "novel_designs": [
+      {
+        "name": "des_001",
+        "modality": "miniprotein",
+        "target": "KRAS G12C (KRAS, 6OIM, Cys12,Asp69,His95,Tyr96)",
+        "sequence": "GSHMASGGSGSGSGSGSGSDDEEELLKKLKEELKKLKEELKKLGGS",
+        "metrics": {
+          "ipTM": 0.71,
+          "pLDDT": 82.1,
+          "boltz2_affinity": null,
+          "i_pAE": null
+        },
+        "proto_run_id": "idoctor-design:fixture:des_001",
+        "generator": "fixture",
+        "wetlab_protocol": "experiment.md",
+        "caveat": "in-silico only; predicted, not measured. Fixture sequence \u2014 do not present as a live invention.",
+        "verdict": "promote",
+        "provenance": "fixture"
+      },
+      {
+        "name": "des_005",
+        "modality": "miniprotein",
+        "target": "KRAS G12C (KRAS, 6OIM, Cys12,Asp69,His95,Tyr96)",
+        "sequence": "GSSHHHHHHSSGLVPRGSHMEEELKKLGEEELKKLGEEELKKLGGSGGS",
+        "metrics": {
+          "ipTM": 0.66,
+          "pLDDT": 75.5,
+          "boltz2_affinity": null,
+          "i_pAE": null
+        },
+        "proto_run_id": "idoctor-design:fixture:des_005",
+        "generator": "fixture",
+        "wetlab_protocol": "experiment.md",
+        "caveat": "in-silico only; predicted, not measured. Fixture sequence \u2014 do not present as a live invention.",
+        "verdict": "hold",
+        "provenance": "fixture"
+      }
+    ]
+  }
+}
