@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -127,7 +128,12 @@ def search(query: str, **kwargs: Any) -> dict[str, Any] | None:
         "PAPERCLIP_SOURCES", "pmc,biorxiv,medrxiv,trials/us"
     )
     limit = int(kwargs.get("limit") or os.environ.get("PAPERCLIP_SEARCH_LIMIT", "20"))
-    cmd = [paperclip_bin]
+    # The installed launcher is `#!/usr/bin/env python3`, which resolves to whatever
+    # python3 is first on PATH — on macOS that is usually a Homebrew interpreter
+    # without `requests`, and the CLI dies with ModuleNotFoundError before it ever
+    # authenticates. Running it under our own interpreter, which has requests, fixes
+    # it without touching the install or needing --break-system-packages.
+    cmd = [sys.executable, paperclip_bin]
     if PAPERCLIP_API_KEY:
         cmd.extend(["--api-key", PAPERCLIP_API_KEY])
     cmd.extend(["search", "-s", str(sources), "-n", str(limit), query])
@@ -159,6 +165,15 @@ def search(query: str, **kwargs: Any) -> dict[str, Any] | None:
     out = (completed.stdout or "").strip()
     if not out:
         raise PaperclipUnavailable("Paperclip CLI returned empty stdout.")
+
+    # The CLI has been observed printing a failure message and still exiting 0, so a
+    # zero return code is not proof of a search. A real one always emits an
+    # `s_<hex>` handle; without it, treat this as unavailable and fall back rather
+    # than parsing an error page into an empty, confident-looking result.
+    if not re.search(r"\bs_[A-Za-z0-9]+\b", out) and not out.lstrip().startswith("{"):
+        raise PaperclipUnavailable(
+            f"Paperclip CLI exited 0 with no search handle: {out[:200]}"
+        )
 
     try:
         parsed = json.loads(out)
