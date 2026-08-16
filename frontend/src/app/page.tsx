@@ -23,6 +23,7 @@ import ComplexResultsPanel from "@/components/ComplexResultsPanel";
 import ExperimentCard from "@/components/ExperimentCard";
 import Header from "@/components/Header";
 import LabLog from "@/components/LabLog";
+import LoopHistoryPanel from "@/components/LoopHistoryPanel";
 import { tracesToLabLog } from "@/lib/labLog";
 
 const DEFAULT_PDB = "6OIM";
@@ -178,6 +179,7 @@ export default function Home() {
     downloadBlob(fasta, `${stem}-designs.fasta`, "text/plain");
     downloadBlob(JSON.stringify(results.verdicts, null, 2), `${stem}-verdicts.json`, "application/json");
     downloadBlob(JSON.stringify(results.complex_scores || {}, null, 2), `${stem}-complex-scores.json`, "application/json");
+    downloadBlob(JSON.stringify(results.loop_history || {}, null, 2), `${stem}-loop-history.json`, "application/json");
   }
 
   const designs = results?.designs?.designs || [];
@@ -298,6 +300,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <LoopHistoryPanel history={results?.loop_history} />
 
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
