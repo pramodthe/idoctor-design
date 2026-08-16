@@ -1,4 +1,9 @@
-"""Designer agent — Proto binder first, then sequence_design, then fixtures."""
+"""Designer agent — Tamarind BindCraft first, then sequence_design, then fixtures.
+
+Proto/Modal is deliberately not used: Tamarind hosts the same models (RFdiffusion3,
+ProteinMPNN) plus BindCraft, against an API key that already works, so there is no
+second GPU stack to keep deployed.
+"""
 
 from __future__ import annotations
 
@@ -7,18 +12,32 @@ import shutil
 import time
 from pathlib import Path
 
-from backend.config import FIXTURES_DIR, USE_PROTO
+from backend.config import DATA_DIR, FIXTURES_DIR
 from backend.contracts.validate import validate_designs
-from backend.tools import proto_runner
+from backend.tools.sequence_design import designs_to_fasta
 
 
 AGENT_NAME = "designer"
-AGENT_DISPLAY = "Sequence design (Proto)"
+AGENT_DISPLAY = "Sequence design (BindCraft)"
+
+BINDCRAFT_DIR = DATA_DIR / "bindcraft_designs"
 
 
 def _engine_from_doc(doc: dict | None, default: str) -> str:
     meta = (doc or {}).get("meta") or {}
     return str(meta.get("design_engine") or default)
+
+
+def _load_bindcraft_designs() -> dict | None:
+    """Load a completed BindCraft campaign from disk, if one exists."""
+    path = BINDCRAFT_DIR / "designs.json"
+    if not path.is_file():
+        return None
+    try:
+        doc = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    return doc if doc.get("designs") else None
 
 
 def run_designer(state: dict, progress_cb=None) -> dict:
@@ -44,49 +63,59 @@ def run_designer(state: dict, progress_cb=None) -> dict:
         fasta_path = run_dir / "designs.fasta"
         if not fasta_path.exists():
             fasta_path.write_text(
-                proto_runner.designs_to_fasta(designs_doc.get("designs") or [])
+                designs_to_fasta(designs_doc.get("designs") or [])
             )
     else:
         if mode == "live":
-            try:
-                detail = (
-                    "Proto binder (RFdiffusion3+MPNN+ipTM) if USE_PROTO/packages; "
-                    "else local sequence_design interim"
-                )
+            # BindCraft runs for hours on Tamarind's GPUs, so it cannot be called
+            # inline per run. A completed campaign is picked up from disk here.
+            bindcraft_doc = _load_bindcraft_designs()
+            if bindcraft_doc:
+                designs_doc = bindcraft_doc
+                engine = "bindcraft"
+                node_source = "live"
                 tool_calls.append(
                     {
-                        "tool": "proto.run",
-                        "detail": detail,
-                        "use_proto_env": USE_PROTO,
-                        "modal_configured": proto_runner.is_configured(),
+                        "tool": "tamarind.bindcraft",
+                        "detail": "RFdiffusion + ProteinMPNN + AF2 with acceptance filters",
+                        "job_name": (bindcraft_doc.get("meta") or {}).get("job_name"),
                     }
                 )
-                result = proto_runner.run_proto(
-                    state.get("scientific_spec") or {},
-                    out_dir=run_dir,
-                    live=True,
+                steps.append(
+                    {
+                        "action": "BindCraft designs (Tamarind)",
+                        "detail": (
+                            f"{len(bindcraft_doc['designs'])} designs that passed "
+                            "BindCraft acceptance filters"
+                        ),
+                    }
                 )
+
+        if designs_doc is None and mode == "live":
+            try:
+                from backend.tools.sequence_design import generate_designs
+
+                tool_calls.append(
+                    {
+                        "tool": "sequence_design.local",
+                        "detail": "Local interim generator — used only until a BindCraft campaign lands",
+                    }
+                )
+                result = generate_designs(state.get("scientific_spec") or {})
                 if result and result.get("designs"):
                     designs_doc = result
-                    engine = _engine_from_doc(result, "unknown")
-                    any_live = any(d.get("provenance") == "live" for d in result["designs"])
-                    node_source = "live" if any_live else "fixture"
-                    if engine == "proto_language":
-                        action = "Proto binder design"
-                    elif engine == "sequence_design":
-                        action = "Local sequence_design (Proto not used)"
-                    else:
-                        action = "Design"
+                    engine = "sequence_design"
+                    node_source = "live"
                     steps.append(
                         {
-                            "action": action,
+                            "action": "Local sequence_design (no BindCraft campaign on disk)",
                             "detail": (
-                                f"{len(result['designs'])} sequences; "
-                                f"engine={engine}; node={node_source}"
+                                f"{len(result['designs'])} sequences; engine=sequence_design; "
+                                "heuristic — not a structure-based design"
                             ),
                         }
                     )
-            except proto_runner.ProtoUnavailable as e:
+            except Exception as e:  # noqa: BLE001
                 steps.append({"action": "Design unavailable", "detail": str(e)})
                 engine = "unavailable"
 
@@ -109,23 +138,23 @@ def run_designer(state: dict, progress_cb=None) -> dict:
     (run_dir / "designs.json").write_text(json.dumps(designs_doc, indent=2))
     if not (run_dir / "designs.fasta").exists():
         (run_dir / "designs.fasta").write_text(
-            proto_runner.designs_to_fasta(designs_doc.get("designs") or [])
+            designs_to_fasta(designs_doc.get("designs") or [])
         )
 
     provenance_nodes[AGENT_NAME] = node_source
     elapsed = time.perf_counter() - start
     n = len(designs_doc.get("designs") or [])
     honest = (
-        f"engine={engine}"
-        if engine == "proto_language"
-        else f"engine={engine} (not Proto — do not claim Modal Proto)"
+        f"engine={engine} (Tamarind BindCraft — structure-based, filter-passed)"
+        if engine == "bindcraft"
+        else f"engine={engine} (heuristic — not a structure-based design)"
     )
     trace = {
         "agent": AGENT_NAME,
         "agent_name": AGENT_DISPLAY,
         "duration_seconds": round(elapsed, 2),
-        "model": "proto_language" if engine == "proto_language" else None,
-        "input_summary": f"mode={mode}; USE_PROTO={USE_PROTO}",
+        "model": "bindcraft" if engine == "bindcraft" else None,
+        "input_summary": f"mode={mode}; design_engine={engine}",
         "output_summary": f"{n} designs; {honest}",
         "steps": steps,
         "tool_calls": tool_calls,

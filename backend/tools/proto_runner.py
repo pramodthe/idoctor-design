@@ -1,4 +1,8 @@
-"""Proto design runner — prefers real Proto binder, then sequence_design, then fixtures."""
+"""Leftover Proto design runner — not imported by backend/agents/designer.py.
+
+Live designer: BindCraft-from-disk → sequence_design → fixtures.
+Keep USE_PROTO=0. Do not claim this module ran on a pipeline click.
+"""
 
 from __future__ import annotations
 
