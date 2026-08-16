@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -416,6 +418,102 @@ def test_incomplete_complex_panel_is_not_trusted():
 
     assert result["design_scores"] == {}
     assert any("incomplete complex panel" in item for item in result["verification_failures"])
+
+
+def test_live_graph_executes_critic_redesign_and_promote_rounds():
+    """The compiled graph must actually traverse the bounded retry edge."""
+    import backend.pipeline as pipeline
+    from backend.config import RUNS_DIR
+
+    run_id = f"test-loop-{uuid.uuid4().hex[:8]}"
+    run_dir = RUNS_DIR / run_id
+    calls = {"designer": 0}
+    spec = {
+        "schema_version": "1.0",
+        "provenance": "live",
+        "hypothesis": "A binder should retain interface confidence on Y96D.",
+        "target": {"name": "KRAS G12C", "gene": "KRAS", "pdb_id": "6OIM", "uniprot_id": "P01116", "clinical_hook": "resistance"},
+        "pocket_residues": ["Cys12", "His95", "Tyr96"],
+        "success_bars": {"max_pdb_identity": 0.7, "min_plddt": 70, "min_iptm": 0.75, "require_mutant_score": True},
+        "mutations": [{"id": "Y96D", "effect_on_sotorasib": "loss", "notes": "", "sources": []}],
+        "failed_small_molecules": [],
+        "structures": [],
+    }
+
+    def trace(agent: str) -> list[dict]:
+        return [{"agent": agent, "agent_name": agent, "duration_seconds": 0.0, "model": None, "input_summary": "test", "output_summary": "test", "steps": [], "tool_calls": [], "llm_calls": []}]
+
+    def fake_evidence(state, progress_cb=None):
+        (Path(state["run_dir"]) / "spec.json").write_text(json.dumps(spec))
+        return {"scientific_spec": spec, "hypothesis": spec["hypothesis"], "provenance_nodes": {"evidence": "live"}, "agent_traces": trace("evidence")}
+
+    def fake_designer(state, progress_cb=None):
+        calls["designer"] += 1
+        retry = calls["designer"] > 1
+        did = "design_retry" if retry else "design_initial"
+        designs = [{
+            "id": did,
+            "sequence": "ACDEFGHIKLMNPQRSTVWY" * 3,
+            "length": 60,
+            "molecule_type": "miniprotein",
+            "constraint_scores": {},
+            "plddt": 82.0,
+            "iptm": 0.82 if retry else 0.70,
+            "pdb_path": "data/test.pdb",
+            "novelty": {"identity": 0.2, "method": "rcsb_mmseqs2"},
+            "fold_method": "tamarind:alphafold2_multimer",
+            "provenance": "live",
+            "iteration": 2 if retry else 1,
+            "lineage": {"iteration": 2 if retry else 1, "parent_ids": ["design_initial"] if retry else [], "failure_codes": ["low_iptm"] if retry else []},
+        }]
+        doc = {"schema_version": "1.0", "designs": designs, "meta": {"design_engine": "test"}}
+        path = Path(state["run_dir"]) / "designs.json"
+        path.write_text(json.dumps(doc))
+        (Path(state["run_dir"]) / "designs.fasta").write_text(f">{did}\n{designs[0]['sequence']}\n")
+        return {"designs": doc, "provenance_nodes": {"designer": "live"}, "agent_traces": trace("designer"), "design_retry_count": 1 if retry else 0}
+
+    def fake_structure(state, progress_cb=None):
+        return {"designs": state["designs"], "provenance_nodes": {"structure": "live"}, "agent_traces": trace("structure")}
+
+    def fake_novelty(state, progress_cb=None):
+        return {"designs": state["designs"], "verification_failures": [], "provenance_nodes": {"novelty": "live"}, "agent_traces": trace("novelty")}
+
+    def fake_complex(state, progress_cb=None):
+        did = state["designs"]["designs"][0]["id"]
+        score = 0.82 if did == "design_retry" else 0.70
+        scores = {did: {"wt_score": score, "mutant_scores": {"Y96D": 0.78 if did == "design_retry" else 0.62}, "method": "tamarind_alphafold_multimer_complex_iptm", "confidence": "predicted_complex", "score_kind": "iptm", "score_direction": "higher_is_better"}}
+        (Path(state["run_dir"]) / "complex_scores.json").write_text(json.dumps(scores))
+        return {"designs": state["designs"], "design_scores": scores, "verification_failures": [], "provenance_nodes": {"complex": "live"}, "agent_traces": trace("complex")}
+
+    def fake_physics(state, progress_cb=None):
+        smallmol = {"schema_version": "1.0", "compounds": []}
+        (Path(state["run_dir"]) / "smallmol.json").write_text(json.dumps(smallmol))
+        return {"smallmol": smallmol, "provenance_nodes": {"physics": "live"}, "agent_traces": trace("physics")}
+
+    def fake_evaluator(state, progress_cb=None):
+        did = state["designs"]["designs"][0]["id"]
+        score = 0.82 if did == "design_retry" else 0.70
+        eval_result = {"schema_version": "1.0", "smallmol_spearman_rho": None, "smallmol_n": 0, "smallmol_note": "test", "disagreements": [], "design_deltas": [{"id": did, "wt_score": score, "mutant_scores": {"Y96D": 0.78 if did == "design_retry" else 0.62}, "note": "test", "evaluation_method": "tamarind_alphafold_multimer_complex_iptm", "evaluation_confidence": "predicted_complex", "score_kind": "iptm", "score_direction": "higher_is_better"}]}
+        (Path(state["run_dir"]) / "eval.json").write_text(json.dumps(eval_result))
+        return {"eval_result": eval_result, "provenance_nodes": {"evaluate": "live"}, "agent_traces": trace("evaluate")}
+
+    def fake_experiment(state, progress_cb=None):
+        (Path(state["run_dir"]) / "experiment.md").write_text("# test")
+        return {"experiment_md": "# test", "provenance_nodes": {"experiment": "live"}, "agent_traces": trace("experiment")}
+
+    try:
+        with patch.object(pipeline, "run_evidence", fake_evidence), patch.object(pipeline, "run_designer", fake_designer), patch.object(pipeline, "run_structure", fake_structure), patch.object(pipeline, "run_novelty", fake_novelty), patch.object(pipeline, "run_complex_evaluator", fake_complex), patch.object(pipeline, "run_physics", fake_physics), patch.object(pipeline, "run_evaluator", fake_evaluator), patch.object(pipeline, "run_experiment", fake_experiment), patch("backend.agents.critic.FAST_DEV", True), patch.object(pipeline, "export_from_run", lambda *_args, **_kwargs: None):
+            result = pipeline.run_idoctor_design(mode="live", run_id=run_id)
+
+        history = result["loop_history"]
+        assert calls["designer"] == 2
+        assert len(history["iterations"]) == 2
+        assert history["iterations"][0]["route"] == "redesign"
+        assert history["iterations"][0]["redesign_feedback"]["priority_codes"] == ["low_iptm"]
+        assert history["iterations"][1]["decision_reason"] == "promoted"
+        assert result["designs"]["designs"][0]["id"] == "design_retry"
+    finally:
+        shutil.rmtree(run_dir, ignore_errors=True)
 
 
 def test_sqlite_checkpoint_resumes_after_interruption():

@@ -279,6 +279,10 @@ export interface AgentStatusMap {
 export interface IDoctorDesignResults {
   status: "completed";
   run_id?: string;
+  path?: string;
+  files?: string[];
+  directories?: string[];
+  directory_files?: Record<string, string[]>;
   hypothesis: string;
   scientific_spec: ScientificSpec;
   designs: DesignsPayload;

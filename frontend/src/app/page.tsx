@@ -25,6 +25,7 @@ import ExperimentCard from "@/components/ExperimentCard";
 import Header from "@/components/Header";
 import LabLog from "@/components/LabLog";
 import LoopHistoryPanel from "@/components/LoopHistoryPanel";
+import RunDetailsPanel from "@/components/RunDetailsPanel";
 import { tracesToLabLog } from "@/lib/labLog";
 
 const DEFAULT_PDB = "6OIM";
@@ -305,6 +306,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {results && <RunDetailsPanel results={results} />}
 
         <LoopHistoryPanel history={results?.loop_history} />
 

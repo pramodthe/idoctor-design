@@ -95,6 +95,27 @@ def _read_json(path: Path):
     return json.loads(path.read_text())
 
 
+def _run_manifest(run_dir: Path | None) -> dict:
+    """Return root and nested artifact names for the saved-run inspector."""
+    if not run_dir or not run_dir.exists():
+        return {"path": None, "files": [], "directories": [], "directory_files": {}}
+    directories = sorted(p.name for p in run_dir.iterdir() if p.is_dir())
+    directory_files = {
+        directory: sorted(
+            str(path.relative_to(run_dir / directory))
+            for path in (run_dir / directory).rglob("*")
+            if path.is_file()
+        )
+        for directory in directories
+    }
+    return {
+        "path": str(run_dir),
+        "files": sorted(p.name for p in run_dir.iterdir() if p.is_file()),
+        "directories": directories,
+        "directory_files": directory_files,
+    }
+
+
 @app.post("/api/run", response_model=RunResponse)
 async def start_run(req: RunRequest):
     job_id = str(uuid.uuid4())[:8]
@@ -215,9 +236,13 @@ async def get_results(job_id: str):
     result = job["result"] or {}
     traces = result.get("agent_traces", [])
     lab_log = job.get("lab_log") or flatten_traces(traces)
+    result_run_id = result.get("run_id")
+    result_run_dir = RUNS_DIR / result_run_id if result_run_id else None
+    manifest = _run_manifest(result_run_dir)
     return {
         "status": "completed",
-        "run_id": result.get("run_id"),
+        "run_id": result_run_id,
+        **manifest,
         "mode": result.get("mode"),
         "hypothesis": result.get("hypothesis"),
         "scientific_spec": result.get("scientific_spec"),
@@ -242,13 +267,10 @@ async def get_latest_run():
     run_dir = _latest_run_dir()
     if not run_dir:
         raise HTTPException(status_code=404, detail="No runs found")
-    files = sorted(p.name for p in run_dir.iterdir() if p.is_file())
-    subdirs = sorted(p.name for p in run_dir.iterdir() if p.is_dir())
+    manifest = _run_manifest(run_dir)
     return {
         "run_id": run_dir.name,
-        "path": str(run_dir),
-        "files": files,
-        "directories": subdirs,
+        **manifest,
         "spec": _read_json(run_dir / "spec.json"),
         "designs": _read_json(run_dir / "designs.json"),
         "smallmol": _read_json(run_dir / "smallmol.json"),

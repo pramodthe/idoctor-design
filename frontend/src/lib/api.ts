@@ -18,6 +18,11 @@ export function getRunArtifactUrl(path: string, download = false): string {
   return `${API_BASE}/api/run-artifact?${params.toString()}`;
 }
 
+export function getRunFileUrl(runId: string, name: string, download = false): string {
+  const params = download ? "?download=true" : "";
+  return `${API_BASE}/api/runs/${encodeURIComponent(runId)}/file/${encodeURIComponent(name)}${params}`;
+}
+
 export async function getBinderPdb(path: string): Promise<string | null> {
   try {
     const res = await fetch(
@@ -137,6 +142,10 @@ export async function loadLatestRun(): Promise<IDoctorDesignResults | null> {
     return {
       status: "completed",
       run_id: data.run_id,
+      path: data.path,
+      files: data.files || [],
+      directories: data.directories || [],
+      directory_files: data.directory_files || {},
       hypothesis: data.hypothesis || spec.hypothesis || "",
       scientific_spec: spec,
       designs: data.designs,
