@@ -11,6 +11,8 @@ interface DesignTableProps {
   rejectOnly?: boolean;
   title?: string;
   designEngine?: string;
+  selectedId?: string | null;
+  onSelectDesign?: (id: string) => void;
 }
 
 const VERDICT_BADGE: Record<string, string> = {
@@ -52,6 +54,8 @@ export default function DesignTable({
   rejectOnly = false,
   title,
   designEngine,
+  selectedId = null,
+  onSelectDesign,
 }: DesignTableProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -109,11 +113,19 @@ export default function DesignTable({
                   <tr
                     className={`cursor-pointer border-b border-slate-200/60 transition-colors hover:bg-slate-50 ${
                       v?.verdict === "reject" ? "bg-red-50/80" : ""
-                    } ${v?.verdict === "promote" ? "bg-emerald-50/80" : ""}`}
-                    onClick={() => setExpanded(open ? null : d.id)}
+                    } ${v?.verdict === "promote" ? "bg-emerald-50/80" : ""} ${selectedId === d.id ? "bg-indigo-50/90 ring-1 ring-inset ring-indigo-200" : ""}`}
+                    onClick={() => {
+                      setExpanded(open ? null : d.id);
+                      onSelectDesign?.(d.id);
+                    }}
                   >
-                    <td className="py-2.5 pr-3 font-mono font-medium text-slate-800">
-                      {d.id}
+                    <td className={`py-2.5 pr-3 font-mono font-medium text-slate-800 ${selectedId === d.id ? "border-l-2 border-indigo-500 pl-2" : ""}`}>
+                      <span className="inline-flex items-center gap-1.5">
+                        {d.id}
+                        {selectedId === d.id && (
+                          <span className="rounded bg-indigo-600 px-1 py-0.5 font-sans text-[8px] font-bold uppercase tracking-wider text-white">focus</span>
+                        )}
+                      </span>
                     </td>
                     <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-400">
                       {truncateSeq(d.sequence)}

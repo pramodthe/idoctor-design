@@ -748,6 +748,8 @@ export default function AgentLineage({
 
   const selectedNode = selectedId ? nodes.find((n) => n.id === selectedId) : null;
   const selectedData = selectedNode?.data;
+  const loopRounds = loopHistory?.iterations || [];
+  const latestLoop = loopRounds[loopRounds.length - 1];
 
   return (
     <div className={`agent-lineage relative h-full overflow-hidden rounded-[24px] ${className}`}>
@@ -777,6 +779,25 @@ export default function AgentLineage({
           <span className="rounded-md bg-slate-100 px-1.5 py-0.2 font-mono text-[10px] text-slate-600">6OIM</span>
         </div>
       </div>
+
+      {latestLoop && (
+        <div className="absolute left-3 top-12 z-30 rounded-xl border border-indigo-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
+          <div className="flex items-center gap-2 text-[10px]">
+            <span className="rounded-md bg-indigo-600 px-1.5 py-0.5 font-bold uppercase tracking-wider text-white">Loop</span>
+            <span className="font-mono font-bold text-slate-800">
+              {latestLoop.iteration}/{loopHistory?.max_iterations || latestLoop.iteration} rounds
+            </span>
+            <span className={`rounded-md px-1.5 py-0.5 font-semibold ${latestLoop.route === "redesign" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+              {latestLoop.route === "redesign" ? "critic → redesign" : "critic → handoff"}
+            </span>
+          </div>
+          {latestLoop.route === "redesign" && latestLoop.redesign_feedback?.instructions && (
+            <p className="mt-1 max-w-[330px] truncate text-[10px] text-amber-800">
+              {latestLoop.redesign_feedback.instructions}
+            </p>
+          )}
+        </div>
+      )}
 
       <ReactFlow
         nodes={nodes}

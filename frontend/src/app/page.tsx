@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import AgentLineage from "@/components/AgentLineage";
 import AppShell from "@/components/AppShell";
+import CandidateReviewPanel from "@/components/CandidateReviewPanel";
 import ComplexResultsPanel from "@/components/ComplexResultsPanel";
 import ExperimentCard from "@/components/ExperimentCard";
 import Header from "@/components/Header";
@@ -48,12 +49,14 @@ export default function Home() {
   const [labLog, setLabLog] = useState<LabLogEvent[]>([]);
   const [activeMode, setActiveMode] = useState<RunMode | null>(null);
   const [copiedSeq, setCopiedSeq] = useState(false);
+  const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
   const runGeneration = useRef(0);
 
   const applyResults = useCallback((loaded: IDoctorDesignResults) => {
     setResults(loaded);
     setAgentStatus(completedAgentMap());
     setActiveMode(loaded.provenance?.mode || "fixture");
+    setSelectedDesignId(null);
     setLabLog(
       loaded.lab_log?.length ? loaded.lab_log : tracesToLabLog(loaded.agent_traces)
     );
@@ -106,6 +109,7 @@ export default function Home() {
       setCurrentStep(null);
       setLabLog([]);
       setActiveMode(mode);
+      setSelectedDesignId(null);
 
       try {
         const run = await runWithFixtureFallback(
@@ -167,6 +171,7 @@ export default function Home() {
     setCurrentStep(null);
     setLabLog([]);
     setActiveMode(null);
+    setSelectedDesignId(null);
   }, []);
 
   function handleDownloads() {
@@ -195,7 +200,7 @@ export default function Home() {
   const heldDesigns = designs.filter((design) =>
     designVerdicts.some((item) => item.subject_id === design.id && item.verdict === "hold")
   );
-  const focusDesign = promotedDesigns[0] || designs[0];
+  const focusDesign = designs.find((design) => design.id === selectedDesignId) || promotedDesigns[0] || designs[0];
   const focusVerdict = designVerdicts.find((item) => item.subject_id === focusDesign?.id);
   const bestIptm = Math.max(
     ...designs
@@ -303,6 +308,15 @@ export default function Home() {
 
         <LoopHistoryPanel history={results?.loop_history} />
 
+        <CandidateReviewPanel
+          designs={designs}
+          verdicts={allVerdicts}
+          deltas={results?.eval?.design_deltas}
+          designEngine={results?.designs?.meta?.design_engine}
+          selectedId={focusDesign?.id || null}
+          onSelectDesign={setSelectedDesignId}
+        />
+
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
             <div>
@@ -341,8 +355,8 @@ export default function Home() {
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-slate-950">Candidate decision</h2>
-                <p className="mt-0.5 text-[11px] text-slate-500">The exact sequence and evidence used by the critic</p>
+                <h2 className="text-base font-bold text-slate-950">Selected candidate</h2>
+                <p className="mt-0.5 text-[11px] text-slate-500">The exact sequence and evidence used by the critic; select another row above to inspect it</p>
               </div>
               {focusVerdict && (
                 <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${

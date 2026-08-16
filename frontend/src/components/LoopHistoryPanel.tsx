@@ -104,6 +104,23 @@ export default function LoopHistoryPanel({ history }: LoopHistoryPanelProps) {
           );
         })}
       </div>
+
+      <div className="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 text-[10px]">
+          <span className="font-bold uppercase tracking-[0.13em] text-indigo-500">Loop path</span>
+          {rounds.map((round, index) => (
+            <span key={round.iteration} className="flex items-center gap-2">
+              {index > 0 && <span className="text-indigo-300">→</span>}
+              <span className="rounded-lg border border-indigo-200 bg-white px-2 py-1 font-semibold text-indigo-800">
+                R{round.iteration} · {round.route === "redesign" ? "redesign" : round.decision_reason === "promoted" ? "promote" : "stop"}
+              </span>
+            </span>
+          ))}
+          {latest.route === "redesign" && (
+            <span className="text-indigo-500">→ critic feedback becomes the next designer brief</span>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
