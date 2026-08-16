@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from pathlib import Path
@@ -35,11 +34,45 @@ def _fixture_design_scores() -> dict[str, dict]:
     return out
 
 
-def _live_heuristic_design_scores(designs: dict | list, spec: dict | None) -> dict[str, dict]:
-    """Deterministic pseudo-interface scores for live designs (not physics).
+# What each resistance mutation changes in the pocket, and which binder features
+# are expected to compensate. Keys: (base penalty kcal, aromatic-reliance coeff,
+# positive-charge compensation coeff, negative-charge coeff).
+#
+# Y96D / H95D introduce a carboxylate where an aromatic/imidazole sat: a binder
+# carrying basic residues can form a compensating salt bridge, while one that
+# leaned on pi-stacking loses its anchor. R68S deletes a basic side chain, so an
+# acidic binder loses the partner it was pairing with. Y96C removes the aromatic
+# without adding charge, so only the stacking term applies.
+_MUTATION_CHEMISTRY: dict[str, tuple[float, float, float, float]] = {
+    "Y96D": (2.0, 3.0, -4.0, 1.5),
+    "H95D": (1.8, 2.0, -3.5, 1.5),
+    "Y96C": (2.2, 3.5, 0.0, 0.0),
+    "R68S": (1.6, 0.0, 0.0, 4.0),
+}
+_DEFAULT_CHEMISTRY = (1.5, 1.0, -1.0, 1.0)
 
-    More negative = better. Mutant retention is biased by pLDDT/novelty so the
-    critic can exercise promote/hold/reject without inventing wet-lab numbers.
+
+def _composition(sequence: str) -> tuple[float, float, float]:
+    """Fractions of basic, acidic and aromatic residues in a binder sequence."""
+    seq = "".join(c for c in (sequence or "").upper() if c.isalpha())
+    n = max(len(seq), 1)
+    basic = sum(1 for c in seq if c in "KR") / n
+    acidic = sum(1 for c in seq if c in "DE") / n
+    aromatic = sum(1 for c in seq if c in "FWY") / n
+    return basic, acidic, aromatic
+
+
+def _live_heuristic_design_scores(designs: dict | list, spec: dict | None) -> dict[str, dict]:
+    """Sequence-derived WT-vs-mutant interface proxy for live designs.
+
+    This is a proxy, not physics: no complex is folded and nothing is docked. But
+    every number here is a function of the design's own sequence composition and
+    its measured structure confidence, so changing a sequence changes its scores
+    and no design is favoured by its position in the list. Designs whose fold came
+    back from a real structure predictor are marked higher confidence than those
+    still carrying heuristic_v1 estimates.
+
+    More negative = better, matching the docking convention used elsewhere.
     """
     if isinstance(designs, dict):
         design_list = designs.get("designs") or []
@@ -51,40 +84,60 @@ def _live_heuristic_design_scores(designs: dict | list, spec: dict | None) -> di
         for m in (spec or {}).get("mutations") or []
         if isinstance(m, dict) and m.get("id")
     ]
-    mut_ids = [m for m in mut_ids if m in _DEFAULT_MUTANTS] or list(_DEFAULT_MUTANTS)
+    mut_ids = [m for m in mut_ids if m in _MUTATION_CHEMISTRY] or list(_DEFAULT_MUTANTS)
 
     out: dict[str, dict] = {}
-    for i, d in enumerate(design_list):
+    for d in design_list:
         did = d.get("id")
         if not did:
             continue
         if d.get("provenance") == "fixture":
             continue
-        plddt = float(d.get("plddt") or 70.0)
-        identity = float((d.get("novelty") or {}).get("identity") or 0.2)
-        seed = int(hashlib.sha256(f"{did}-iface".encode()).hexdigest()[:8], 16)
-        # WT score in roughly [-10, -6]
-        wt = -6.0 - (plddt - 60.0) / 20.0 - (seed % 100) / 200.0
+
+        sequence = d.get("sequence") or ""
+        if not sequence:
+            continue
+        basic, acidic, aromatic = _composition(sequence)
+
+        plddt = d.get("plddt")
+        iptm = d.get("iptm")
+        fold_method = str(d.get("fold_method") or "")
+        measured = bool(fold_method) and not fold_method.startswith("heuristic")
+
+        # WT affinity proxy scales with how confident the fold is. A binder nobody
+        # can fold confidently does not get to claim a strong interface.
+        confidence = (float(plddt) / 100.0) if plddt is not None else 0.7
+        if iptm is not None:
+            confidence = (confidence + float(iptm)) / 2.0
+        wt = -5.5 - 4.0 * max(0.0, min(1.0, confidence))
+
         mutants: dict[str, float] = {}
-        for j, mid in enumerate(mut_ids):
-            # Top designs retain mutant binding; weaker / high-identity designs collapse
-            retain = (i < 2 and identity < 0.4 and plddt >= 75)
-            if retain:
-                delta = 0.3 + ((seed >> (j * 3)) % 50) / 100.0  # small loss
-            elif i < 4:
-                delta = 1.5 + ((seed >> (j * 3)) % 80) / 100.0
-            else:
-                delta = 3.2 + ((seed >> (j * 3)) % 120) / 100.0  # wt_only collapse
+        for mid in mut_ids:
+            base, arom_coeff, pos_coeff, neg_coeff = _MUTATION_CHEMISTRY.get(
+                mid, _DEFAULT_CHEMISTRY
+            )
+            # Positive delta = worse binding against the mutant than against WT.
+            delta = (
+                base
+                + arom_coeff * aromatic
+                + pos_coeff * basic
+                + neg_coeff * acidic
+            )
+            delta = max(0.1, min(5.0, delta))
             mutants[mid] = round(wt + delta, 2)
+
         note = (
-            "Heuristic interface scores (not docking/MD). "
-            "Used so the critic can compare WT vs mutant until Tamarind/complex jobs exist."
+            "Sequence-derived interface proxy (not docking/MD/complex folding). "
+            "Delta per mutation is computed from this binder's own basic/acidic/"
+            "aromatic composition against the chemistry each mutation changes; "
+            f"WT term scales with fold confidence ({'measured: ' + fold_method if measured else 'heuristic fold estimate'}). "
+            "Treat as a screening prior, not evidence of binding."
         )
-        if i >= 4:
-            note += " Intentionally WT-biased for reject-path testing."
         out[did] = {
             "wt_score": round(wt, 2),
             "mutant_scores": mutants,
+            "method": "sequence_proxy_v2",
+            "confidence": "measured_fold" if measured else "estimated_fold",
             "note": note,
         }
     return out
