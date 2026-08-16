@@ -91,8 +91,16 @@ def test_live() -> str:
     if not r.get("experiment_md"):
         _fail("expected experiment.md")
 
-    fixture_fasta = (REPO / "spec/fixtures/designs.example.fasta").read_text()
-    collision = any(d.get("sequence") in fixture_fasta for d in designs[:3])
+    fixture_designs = REPO / "frontend" / "public" / "fixtures" / "designs.example.json"
+    fixture_seqs = set()
+    if fixture_designs.is_file():
+        fixture_doc = json.loads(fixture_designs.read_text())
+        fixture_seqs = {
+            d.get("sequence")
+            for d in (fixture_doc.get("designs") or [])
+            if d.get("sequence")
+        }
+    collision = any(d.get("sequence") in fixture_seqs for d in designs[:3])
     _ok(f"run_id={r['run_id']}")
     _ok(f"nodes={nodes}")
     _ok(f"first design provenance={designs[0].get('provenance')}")
