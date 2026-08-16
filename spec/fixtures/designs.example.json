@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "score_direction": "lower_is_better",
+  "designs": [
+    {
+      "id": "des_001",
+      "sequence": "GSHMASGGSGSGSGSGSGSDDEEELLKKLKEELKKLKEELKKLGGS",
+      "length": 46,
+      "molecule_type": "miniprotein",
+      "constraint_scores": { "spec_match": 0.42, "fold_plausibility": 0.31 },
+      "plddt": 82.1,
+      "iptm": 0.71,
+      "pdb_path": null,
+      "novelty": { "identity": 0.22, "method": "unchecked_fixture" },
+      "provenance": "fixture"
+    },
+    {
+      "id": "des_002",
+      "sequence": "GSHMKKLKEEAKKLKEEAKKLKEEGGSGGSC",
+      "length": 31,
+      "molecule_type": "peptide",
+      "constraint_scores": { "spec_match": 0.55, "fold_plausibility": 0.48 },
+      "plddt": 61.0,
+      "iptm": 0.40,
+      "pdb_path": null,
+      "novelty": { "identity": 0.18, "method": "unchecked_fixture" },
+      "provenance": "fixture"
+    },
+    {
+      "id": "des_003",
+      "sequence": "MTEYKLVVVGACGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNTKSFEDIHHYREQIKRVKDSEDVPMVLVGNKCDLPSRTVDTKQAQDLARSYGIPFIETSAKTRQRVEDAFYTLVREIRQYRLKKISKEEKT",
+      "length": 169,
+      "molecule_type": "miniprotein",
+      "constraint_scores": { "spec_match": 0.12, "fold_plausibility": 0.20 },
+      "plddt": 88.0,
+      "iptm": 0.80,
+      "pdb_path": null,
+      "novelty": { "identity": 0.96, "method": "unchecked_fixture" },
+      "provenance": "fixture"
+    },
+    {
+      "id": "des_004",
+      "sequence": "ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY",
+      "length": 40,
+      "molecule_type": "peptide",
+      "constraint_scores": { "spec_match": 0.80, "fold_plausibility": 0.77 },
+      "plddt": 58.4,
+      "iptm": null,
+      "pdb_path": null,
+      "novelty": { "identity": 0.11, "method": "unchecked_fixture" },
+      "provenance": "fixture"
+    },
+    {
+      "id": "des_005",
+      "sequence": "GSSHHHHHHSSGLVPRGSHMEEELKKLGEEELKKLGEEELKKLGGSGGS",
+      "length": 48,
+      "molecule_type": "miniprotein",
+      "constraint_scores": { "spec_match": 0.38, "fold_plausibility": 0.29 },
+      "plddt": 75.5,
+      "iptm": 0.66,
+      "pdb_path": null,
+      "novelty": { "identity": 0.25, "method": "unchecked_fixture" },
+      "provenance": "fixture"
+    }
+  ]
+}

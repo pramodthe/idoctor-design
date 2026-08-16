@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "receptor_pdb_wt": "6OIM",
+  "compounds": [
+    {
+      "id": "sotorasib",
+      "name": "Sotorasib (Lumakras)",
+      "smiles": "C=CC(=O)N1CCN(c2nc(OC)ncc2F)C(=O)[C@@H]1c1cc(Cl)c(F)c(NC(=O)C2CC2)c1",
+      "known_ki_nm": 6.3,
+      "vina_wt": -8.1,
+      "vina_mutants": { "Y96D": -5.2, "H95D": -6.0, "R68S": -7.4, "Y96C": -5.5 },
+      "pains_flags": [],
+      "lipinski_violations": 0
+    },
+    {
+      "id": "adagrasib",
+      "name": "Adagrasib (Krazati)",
+      "smiles": "C=CC(=O)N1CCN(c2c(F)cc(OC)nc2N3CCCC3)CC1c1cc(Cl)c(F)c(NC(=O)C2CC2)c1",
+      "known_ki_nm": 0.13,
+      "vina_wt": -8.4,
+      "vina_mutants": { "Y96D": -5.0, "H95D": -6.1, "R68S": -7.1, "Y96C": -5.4 },
+      "pains_flags": [],
+      "lipinski_violations": 0
+    },
+    {
+      "id": "ars1620",
+      "name": "ARS-1620",
+      "smiles": "C=CC(=O)Nc1cc(N2CCN(c3ncnc4[nH]ccc34)CC2)c(F)cc1Cl",
+      "known_ki_nm": 120.0,
+      "vina_wt": -7.6,
+      "vina_mutants": { "Y96D": -5.8, "H95D": -6.4, "R68S": -7.0, "Y96C": -5.9 },
+      "pains_flags": [],
+      "lipinski_violations": 0
+    },
+    {
+      "id": "sml8708",
+      "name": "SML-8-73-1",
+      "smiles": "O=P(O)(O)OC[C@H]1OC(n2cnc3c(N)ncnc32)[C@H](O)[C@@H]1O",
+      "known_ki_nm": 15000.0,
+      "vina_wt": -8.6,
+      "vina_mutants": { "Y96D": -8.1, "H95D": -8.0, "R68S": -8.2, "Y96C": -8.0 },
+      "pains_flags": [],
+      "lipinski_violations": 1
+    }
+  ]
+}

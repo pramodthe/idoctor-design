@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0",
+  "provenance": "fixture",
+  "hypothesis": "Switch II small-molecule drugs that work on KRAS G12C lose binding when pocket residues such as Y96 change; a designed miniprotein that uses a larger surface can keep contacts outside the sotorasib epitope and should be tested on Y96D, not only on wild-type G12C.",
+  "target": {
+    "name": "KRAS G12C",
+    "gene": "KRAS",
+    "pdb_id": "6OIM",
+    "uniprot_id": "P01116",
+    "clinical_hook": "Sotorasib (Lumakras) is approved for KRAS G12C, but resistance mutations in the pocket cause relapse within months for many patients."
+  },
+  "pocket_residues": ["Cys12", "Asp69", "His95", "Tyr96"],
+  "success_bars": {
+    "max_pdb_identity": 0.7,
+    "min_plddt": 70,
+    "require_mutant_score": true
+  },
+  "mutations": [
+    {
+      "id": "Y96D",
+      "effect_on_sotorasib": "loss",
+      "notes": "Classic Switch II pocket change. Literature reports strong loss of sotorasib binding. Verify quotes from Paperclip before calling this live.",
+      "sources": [
+        {
+          "kind": "paper",
+          "id": "FIXTURE-PMID-Y96D",
+          "title": "Fixture placeholder — replace with Paperclip paper id",
+          "quote": "Replace this quote with a real excerpt from Paperclip."
+        }
+      ]
+    },
+    {
+      "id": "H95D",
+      "effect_on_sotorasib": "reduced",
+      "notes": "His95 lines the pocket used by covalent G12C inhibitors.",
+      "sources": [
+        {
+          "kind": "paper",
+          "id": "FIXTURE-PMID-H95D",
+          "title": "Fixture placeholder — replace with Paperclip paper id",
+          "quote": "Replace this quote with a real excerpt from Paperclip."
+        }
+      ]
+    },
+    {
+      "id": "R68S",
+      "effect_on_sotorasib": "reduced",
+      "notes": "Reported in clinical resistance series; confirm effect size from trials/papers.",
+      "sources": [
+        {
+          "kind": "trial",
+          "id": "FIXTURE-NCT-R68S",
+          "title": "Fixture placeholder — replace with ClinicalTrials.gov id",
+          "quote": "Replace this quote with a real excerpt from Paperclip."
+        }
+      ]
+    },
+    {
+      "id": "Y96C",
+      "effect_on_sotorasib": "unclear",
+      "notes": "Same residue as Y96D; include until Paperclip confirms or drops it.",
+      "sources": [
+        {
+          "kind": "paper",
+          "id": "FIXTURE-PMID-Y96C",
+          "title": "Fixture placeholder — replace with Paperclip paper id",
+          "quote": "Replace this quote with a real excerpt from Paperclip."
+        }
+      ]
+    }
+  ],
+  "failed_small_molecules": [
+    {
+      "id": "sotorasib",
+      "name": "Sotorasib (Lumakras)",
+      "why_not_enough": "Approved and active on G12C, but resistance mutations in the Switch II pocket limit durability.",
+      "sources": [
+        {
+          "kind": "paper",
+          "id": "FIXTURE-PMID-SOTO",
+          "title": "Fixture placeholder",
+          "quote": "Replace with Paperclip excerpt."
+        }
+      ]
+    },
+    {
+      "id": "adagrasib",
+      "name": "Adagrasib (Krazati)",
+      "why_not_enough": "Second approved covalent G12C inhibitor; overlapping resistance liabilities.",
+      "sources": [
+        {
+          "kind": "paper",
+          "id": "FIXTURE-PMID-ADA",
+          "title": "Fixture placeholder",
+          "quote": "Replace with Paperclip excerpt."
+        }
+      ]
+    }
+  ],
+  "structures": [
+    {
+      "pdb_id": "6OIM",
+      "label": "KRAS G12C with ARS-1620 (Switch II pocket)",
+      "kind": "wt_g12c",
+      "notes": "Default receptor for the control docking arm."
+    },
+    {
+      "pdb_id": null,
+      "label": "Y96D complex",
+      "kind": "mutant",
+      "mutation_id": "Y96D",
+      "notes": "If Paperclip/PDB has no structure, set modeled_or_missing and flag scores as modeled."
+    }
+  ]
+}

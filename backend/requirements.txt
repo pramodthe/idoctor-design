@@ -1,0 +1,11 @@
+fastapi>=0.115
+uvicorn[standard]>=0.34
+pydantic>=2.11
+requests>=2.32
+numpy>=2.2
+langgraph>=0.4
+langchain-core>=0.3
+anthropic>=0.40
+rdkit
+sse-starlette>=2.3
+python-dotenv>=1.0

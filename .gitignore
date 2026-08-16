@@ -1,0 +1,36 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+*.pdb
+data/pdb_cache/
+data/precomputed/
+venv/
+.venv/
+
+node_modules/
+.next/
+frontend/.next/
+frontend/node_modules/
+
+.DS_Store
+
+# Private docs
+docs/commercialization_plan.md
+docs/market_research.md
+docs/social_posts_draft.md
+docs/DEMO_PLAN.md
+docs/LINKEDIN_POSTS.md
+docs/SUBMISSION.md
+
+# Presentation
+*.pptx
+
+# Validation output
+data/validation/
+
+# iDoctor Design run artifacts (keep the folder)
+data/runs/*
+!data/runs/.gitkeep
