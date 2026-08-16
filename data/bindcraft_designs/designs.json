@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "score_direction": "lower_is_better",
+  "designs": [
+    {
+      "id": "design_0",
+      "sequence": "QNFVEITDFEGLKEFMKQVDEILEEARNGGNENYREELKEAAEEVKEALKRVRNSGDFDEELYNELRSLYNFLFFVLRSQ",
+      "length": 80,
+      "molecule_type": "miniprotein",
+      "constraint_scores": {
+        "i_pae": null,
+        "passed_bindcraft_filters": true
+      },
+      "score_direction": "lower_is_better",
+      "plddt": null,
+      "iptm": 0.7014,
+      "pdb_path": "data/bindcraft_designs/esmbinder-kras-590e13a6-design_0.pdb",
+      "novelty": {
+        "identity": null,
+        "method": "unchecked"
+      },
+      "fold_method": "esmfold2",
+      "generator": "tamarind:esmfold2-binder-design",
+      "provenance": "live",
+      "raw_metrics": {
+        "name": "design_0",
+        "seed": "117565919",
+        "binder_sequence": "GLVEEAIEVLRELIEASDDEDVKKELRKFLEAFQELLRNGGDKELALKLLRELAELVVQSDDDRLAYILLRFLIRVFNNQ",
+        "binder_length": "80",
+        "final_loss": "4.1276",
+        "iptm": "0.7014",
+        "distogram_iptm_proxy": "0.7357",
+        "cdr_distogram_iptm_proxy": "nan",
+        "best_critic": "ESMFold2-Experimental-Fast"
+      },
+      "notes": "Designed by ESMFold2 Binder Design on Tamarind against KRAS G12C (6OIM chain A, cys-light construct). Metrics are model predictions, not wet-lab measurements."
+    }
+  ],
+  "meta": {
+    "engine": "esmfold2-binder-design",
+    "design_engine": "esmfold2-binder-design",
+    "job_name": "esmbinder-kras-590e13a6",
+    "settings": {}
+  }
+}

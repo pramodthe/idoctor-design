@@ -22,6 +22,10 @@ const VERDICT_BADGE: Record<string, string> = {
 function engineLabel(d: Design, payloadEngine?: string): string {
   const raw = `${d.generator || ""} ${payloadEngine || ""} ${d.fold_method || ""} ${d.provenance || ""}`.toLowerCase();
   if (raw.includes("bindcraft")) return "BindCraft (Tamarind)";
+  // Structure-based, but single-shot: no BindCraft acceptance filters were applied,
+  // so this must never render as BindCraft.
+  if (raw.includes("esmfold2-binder-design"))
+    return "ESMFold2 binder design (Tamarind) — not filter-passed";
   if (raw.includes("sequence_design") || raw.includes("heuristic"))
     return "heuristic generator — not RFdiffusion";
   if (d.provenance === "fixture" || payloadEngine === "fixture") return "fixture";
