@@ -53,8 +53,11 @@ def test_fixture() -> str:
     items = r["verdicts"].get("items") or r["verdicts"].get("verdicts") or []
     promotes = [v for v in items if v.get("verdict", v.get("decision")) == "promote"]
     rejects = [v for v in items if v.get("verdict", v.get("decision")) == "reject"]
-    if not promotes:
-        _fail("expected at least one promote")
+    holds = [v for v in items if v.get("verdict", v.get("decision")) == "hold"]
+    # Fixture metrics are untrusted; the critic may hold or reject but must
+    # never promote (provenance honesty).
+    if promotes:
+        _fail(f"fixture mode promoted {len(promotes)} candidate(s); critic gates were loosened")
     if not rejects:
         _fail("expected at least one reject")
     if not r.get("experiment_md"):
@@ -62,7 +65,7 @@ def test_fixture() -> str:
 
     _ok(f"run_id={r['run_id']}")
     _ok(f"nodes={r['provenance'].get('nodes')}")
-    _ok(f"promote={len(promotes)} reject={len(rejects)}")
+    _ok(f"promote={len(promotes)} hold={len(holds)} reject={len(rejects)}")
     _ok(f"experiment={len(r['experiment_md'])} chars")
     return r["run_id"]
 
@@ -86,8 +89,9 @@ def test_live() -> str:
     items = (r.get("verdicts") or {}).get("items") or (r.get("verdicts") or {}).get("verdicts") or []
     promotes = [v for v in items if v.get("verdict", v.get("decision")) == "promote"]
     rejects = [v for v in items if v.get("verdict", v.get("decision")) == "reject"]
-    if not promotes or not rejects:
-        _fail(f"expected promote+reject, got promote={len(promotes)} reject={len(rejects)}")
+    holds = [v for v in items if v.get("verdict", v.get("decision")) == "hold"]
+    if not items:
+        _fail("live run produced no verdicts")
     if not r.get("experiment_md"):
         _fail("expected experiment.md")
 
@@ -103,6 +107,7 @@ def test_live() -> str:
     collision = any(d.get("sequence") in fixture_seqs for d in designs[:3])
     _ok(f"run_id={r['run_id']}")
     _ok(f"nodes={nodes}")
+    _ok(f"promote={len(promotes)} hold={len(holds)} reject={len(rejects)}")
     _ok(f"first design provenance={designs[0].get('provenance')}")
     _ok(f"fixture_seq_collision={collision}")
     return r["run_id"]
@@ -160,9 +165,14 @@ def test_api(base: str = "http://127.0.0.1:8080") -> None:
     items = (last.get("verdicts") or {}).get("items") or []
     promotes = [v for v in items if v.get("verdict") == "promote"]
     rejects = [v for v in items if v.get("verdict") == "reject"]
-    if not promotes or not rejects:
-        _fail(f"API results missing promote/reject: {len(promotes)}/{len(rejects)}")
-    _ok(f"results run_id={last.get('run_id')} promote={len(promotes)} reject={len(rejects)}")
+    holds = [v for v in items if v.get("verdict") == "hold"]
+    if not items:
+        _fail("API results missing verdicts")
+    if promotes:
+        _fail("API fixture run promoted a candidate; critic gates were loosened")
+    if not rejects:
+        _fail(f"API fixture run missing rejects: hold={len(holds)}")
+    _ok(f"results run_id={last.get('run_id')} promote={len(promotes)} hold={len(holds)} reject={len(rejects)}")
     print("  API E2E OK")
 
 
