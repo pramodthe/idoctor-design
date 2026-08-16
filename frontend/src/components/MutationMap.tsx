@@ -5,8 +5,8 @@ import type { SpecMutation, MutationEffect } from "@/lib/types";
 
 const EFFECT_STYLES: Record<MutationEffect, string> = {
   loss: "bg-red-50 text-red-700 border-red-200",
-  reduced: "bg-amber-50 text-amber-800 border-amber-200",
-  unclear: "bg-slate-100 text-slate-600 border-slate-200",
+  reduced: "bg-amber-50 text-amber-700 border-amber-200",
+  unclear: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 interface MutationMapProps {
@@ -23,12 +23,12 @@ export default function MutationMap({ mutations }: MutationMapProps) {
         return (
           <div
             key={m.id}
-            className="border-b border-slate-200/80 last:border-0"
+            className="border-b border-slate-200 last:border-0"
           >
             <button
               type="button"
               onClick={() => setExpanded(open ? null : m.id)}
-              className="flex w-full items-start gap-3 py-3 text-left transition-colors hover:bg-teal-50/40"
+              className="flex w-full items-start gap-3 rounded-lg py-3 text-left transition-colors hover:bg-slate-50"
             >
               <span className="mt-0.5 font-mono text-sm font-semibold text-slate-900">
                 {m.id}
@@ -42,7 +42,7 @@ export default function MutationMap({ mutations }: MutationMapProps) {
                 {m.sources.map((s) => s.id).join(", ")}
               </span>
               <svg
-                className={`mt-1 h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+                className={`mt-1 h-3.5 w-3.5 shrink-0 text-slate-600 transition-transform ${open ? "rotate-180" : ""}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -54,24 +54,24 @@ export default function MutationMap({ mutations }: MutationMapProps) {
             {open && (
               <div className="animate-fade-in space-y-3 pb-4 pl-1">
                 {m.notes && (
-                  <p className="text-xs leading-relaxed text-slate-600">{m.notes}</p>
+                  <p className="text-xs leading-relaxed text-slate-400">{m.notes}</p>
                 )}
                 {m.sources.map((s) => (
                   <div
                     key={`${s.kind}-${s.id}`}
-                    className="border-l-2 border-teal-600/40 pl-3"
+                    className="border-l-2 border-blue-200 pl-3"
                   >
                     <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-teal-700">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">
                         {s.kind}
                       </span>
-                      <span className="font-mono text-xs text-slate-800">{s.id}</span>
+                      <span className="font-mono text-xs text-slate-700">{s.id}</span>
                       {s.title && (
                         <span className="text-xs text-slate-500">{s.title}</span>
                       )}
                     </div>
                     {s.quote && (
-                      <blockquote className="mt-1 text-xs italic leading-relaxed text-slate-600">
+                      <blockquote className="mt-1 text-xs italic leading-relaxed text-slate-400">
                         &ldquo;{s.quote}&rdquo;
                       </blockquote>
                     )}

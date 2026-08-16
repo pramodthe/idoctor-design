@@ -165,6 +165,12 @@ def design_deltas(
         wt = extra.get("wt_score", d.get("wt_score"))
         mutants = extra.get("mutant_scores", d.get("mutant_scores") or d.get("interface_scores") or {})
         note = extra.get("note", d.get("delta_note", ""))
+        method = extra.get("method", d.get("evaluation_method"))
+        confidence = extra.get("confidence", d.get("evaluation_confidence"))
+        score_kind = extra.get("score_kind", d.get("evaluation_score_kind"))
+        score_direction = extra.get(
+            "score_direction", d.get("evaluation_score_direction")
+        )
         if wt is None and not mutants and did not in scores:
             # Still emit a row so critic can see missing metrics
             note = note or "No WT/mutant interface scores available."
@@ -173,6 +179,10 @@ def design_deltas(
                 "id": did,
                 "wt_score": wt,
                 "mutant_scores": mutants if isinstance(mutants, dict) else {},
+                "evaluation_method": method,
+                "evaluation_confidence": confidence,
+                "score_kind": score_kind,
+                "score_direction": score_direction,
                 "note": note,
             }
         )

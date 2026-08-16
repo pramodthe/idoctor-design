@@ -29,6 +29,8 @@ def _fixture_design_scores() -> dict[str, dict]:
         out[row["id"]] = {
             "wt_score": row.get("wt_score"),
             "mutant_scores": row.get("mutant_scores") or {},
+            "method": "fixture",
+            "confidence": "fixture",
             "note": row.get("note", ""),
         }
     return out
@@ -183,9 +185,16 @@ def run_evaluator(state: dict, progress_cb=None) -> dict:
             else:
                 # replay without skip: prefer existing deltas on designs, else fixture map
                 design_scores = _fixture_design_scores()
+        elif mode == "live":
+            steps.append(
+                {
+                    "action": "Verified complex design scores",
+                    "detail": f"{len(design_scores)} designs from complex evaluator",
+                }
+            )
 
         eval_result = evaluate_smallmol_and_designs(smallmol, designs, design_scores)
-        node_source = "live"
+        node_source = "fixture" if mode == "fixture" else "live"
         steps.append(
             {
                 "action": "Oracle evaluate",
@@ -211,6 +220,7 @@ def run_evaluator(state: dict, progress_cb=None) -> dict:
         "output_summary": eval_result.get("smallmol_note", "eval.json written"),
         "steps": steps,
         "tool_calls": [{"tool": "oracle.evaluate", "detail": "Spearman + residuals + design_deltas"}],
+        "llm_calls": [],
     }
     traces = list(state.get("agent_traces") or [])
     traces.append(trace)

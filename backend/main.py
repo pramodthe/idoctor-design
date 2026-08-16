@@ -15,8 +15,9 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from backend.agents.lab_log import flatten_traces
 from backend.compounds import KRAS_COMPOUNDS, TARGET_COMPOUNDS
-from backend.config import IDOCTOR_DESIGN_DEFAULT_MODE, KNOWN_TARGETS, RUNS_DIR
+from backend.config import BASE_DIR, IDOCTOR_DESIGN_DEFAULT_MODE, KNOWN_TARGETS, RUNS_DIR
 from backend.pipeline import AGENT_DISPLAY, run_idoctor_design_async
 from backend.simulation.openmm_runner import download_pdb
 
@@ -26,6 +27,8 @@ AGENT_NAMES = [
     "evidence",
     "designer",
     "structure",
+    "novelty",
+    "complex",
     "physics",
     "evaluate",
     "critic",
@@ -53,6 +56,7 @@ app.add_middleware(
 class RunRequest(BaseModel):
     mode: Literal["fixture", "replay", "live"] = "fixture"
     run_id: str | None = None
+    resume: bool = False
 
 
 class TamarindJobSpec(BaseModel):
@@ -71,7 +75,15 @@ class RunResponse(BaseModel):
 def _latest_run_dir() -> Path | None:
     if not RUNS_DIR.exists():
         return None
-    runs = [p for p in RUNS_DIR.iterdir() if p.is_dir()]
+    # Ignore freshly-created or failed empty folders; the UI needs a coherent run.
+    runs = [
+        p
+        for p in RUNS_DIR.iterdir()
+        if p.is_dir()
+        and (p / "provenance.json").is_file()
+        and (p / "spec.json").is_file()
+        and (p / "designs.json").is_file()
+    ]
     if not runs:
         return None
     return max(runs, key=lambda p: p.stat().st_mtime)
@@ -91,7 +103,9 @@ async def start_run(req: RunRequest):
         "status": "running",
         "mode": mode,
         "run_id": req.run_id,
+        "resume": req.resume,
         "agent_status": {name: "pending" for name in AGENT_NAMES},
+        "lab_log": [],
         "result": None,
         "events": asyncio.Queue(),
     }
@@ -105,16 +119,30 @@ async def start_run(req: RunRequest):
                 "agent_display": AGENT_DISPLAY.get(agent_name, agent_name),
                 "status": status,
             }
+            log = kwargs.get("log")
+            if isinstance(log, dict):
+                entry = {"agent": agent_name, **log}
+                log_list = jobs[job_id].setdefault("lab_log", [])
+                log_list.append(entry)
+                if len(log_list) > 250:
+                    del log_list[: len(log_list) - 250]
+                event["log"] = entry
             if "step" in kwargs:
                 event["step"] = kwargs["step"]
                 jobs[job_id]["current_step"] = kwargs["step"]
+                if not isinstance(log, dict):
+                    jobs[job_id].setdefault("lab_log", []).append(
+                        {"agent": agent_name, "kind": "step", "text": kwargs["step"]}
+                    )
             try:
                 jobs[job_id]["events"].put_nowait(event)
             except asyncio.QueueFull:
                 pass
 
         try:
-            result = await run_idoctor_design_async(mode, req.run_id, progress_cb)
+            result = await run_idoctor_design_async(
+                mode, req.run_id, progress_cb, req.resume
+            )
             jobs[job_id]["result"] = result
             jobs[job_id]["run_id"] = result.get("run_id")
             jobs[job_id]["status"] = "completed"
@@ -176,6 +204,7 @@ async def get_results(job_id: str):
             "status": "running",
             "agent_status": job["agent_status"],
             "run_id": job.get("run_id"),
+            "lab_log": job.get("lab_log") or [],
         }
         if "current_step" in job:
             resp["current_step"] = job["current_step"]
@@ -184,6 +213,8 @@ async def get_results(job_id: str):
         raise HTTPException(status_code=500, detail=job.get("error", "Pipeline failed"))
 
     result = job["result"] or {}
+    traces = result.get("agent_traces", [])
+    lab_log = job.get("lab_log") or flatten_traces(traces)
     return {
         "status": "completed",
         "run_id": result.get("run_id"),
@@ -193,11 +224,16 @@ async def get_results(job_id: str):
         "designs": result.get("designs"),
         "smallmol": result.get("smallmol"),
         "eval": result.get("eval") or result.get("eval_result"),
+        "complex_scores": result.get("complex_scores"),
         "verdicts": result.get("verdicts"),
         "experiment_md": result.get("experiment_md"),
         "provenance": result.get("provenance"),
-        "agent_traces": result.get("agent_traces", []),
+        "agent_traces": traces,
+        "lab_log": lab_log,
         "agent_status": job.get("agent_status"),
+        "loop_history": result.get("loop_history"),
+        "loop_termination_reason": result.get("loop_termination_reason"),
+        "checkpointed": result.get("checkpointed", False),
     }
 
 
@@ -217,9 +253,16 @@ async def get_latest_run():
         "designs": _read_json(run_dir / "designs.json"),
         "smallmol": _read_json(run_dir / "smallmol.json"),
         "eval": _read_json(run_dir / "eval.json"),
+        "complex_scores": _read_json(run_dir / "complex_scores.json"),
         "verdicts": _read_json(run_dir / "verdicts.json"),
         "provenance": _read_json(run_dir / "provenance.json"),
         "agent_traces": _read_json(run_dir / "traces.json"),
+        "loop_history": _read_json(run_dir / "loop_history.json"),
+        "loop_termination_reason": (
+            _read_json(run_dir / "loop_history.json") or {}
+        ).get("termination_reason"),
+        "checkpointed": (run_dir / "langgraph.sqlite").is_file(),
+        "lab_log": flatten_traces(_read_json(run_dir / "traces.json")),
         "experiment_md": (run_dir / "experiment.md").read_text()
         if (run_dir / "experiment.md").exists()
         else None,
@@ -240,6 +283,41 @@ async def get_run_file(run_id: str, name: str):
     if safe.endswith(".json"):
         return _read_json(path)
     return FileResponse(path)
+
+
+@app.get("/api/binder-pdb")
+async def get_binder_pdb(path: str):
+    """Read a design PDB that lives under the repo (campaign files, run structures)."""
+    if not path or ".." in path:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    raw = Path(path)
+    resolved = raw.resolve() if raw.is_absolute() else (BASE_DIR / path).resolve()
+    root = BASE_DIR.resolve()
+    if root not in resolved.parents and resolved != root:
+        raise HTTPException(status_code=400, detail="Path outside workspace")
+    if not resolved.is_file() or resolved.suffix.lower() != ".pdb":
+        raise HTTPException(status_code=404, detail="PDB not found")
+    return {"path": str(resolved.relative_to(root)), "pdb_data": resolved.read_text()}
+
+
+@app.get("/api/run-artifact")
+async def get_run_artifact(path: str, download: bool = False):
+    """Serve a generated run artifact, restricted to data/runs."""
+    if not path or ".." in path:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    raw = Path(path)
+    resolved = raw.resolve() if raw.is_absolute() else (BASE_DIR / path).resolve()
+    runs_root = RUNS_DIR.resolve()
+    if runs_root not in resolved.parents:
+        raise HTTPException(status_code=400, detail="Artifact outside run storage")
+    if not resolved.is_file():
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    disposition = "attachment" if download else "inline"
+    return FileResponse(
+        resolved,
+        filename=resolved.name if download else None,
+        content_disposition_type=disposition,
+    )
 
 
 @app.get("/api/protein/{pdb_id}")

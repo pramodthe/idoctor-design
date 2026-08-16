@@ -27,7 +27,7 @@ export default function ExperimentCard({ markdown }: ExperimentCardProps) {
           return (
             <h4
               key={i}
-              className="mb-2 mt-4 font-sans text-xs font-semibold uppercase tracking-wider text-teal-800"
+              className="mb-2 mt-4 font-sans text-xs font-semibold uppercase tracking-wider text-blue-600"
             >
               {line.slice(3)}
             </h4>
@@ -36,7 +36,7 @@ export default function ExperimentCard({ markdown }: ExperimentCardProps) {
         if (line.startsWith("- ")) {
           return (
             <div key={i} className="flex gap-2 pl-1">
-              <span className="text-teal-600">·</span>
+              <span className="text-blue-600">·</span>
               <span className="whitespace-pre-wrap">{formatInline(line.slice(2))}</span>
             </div>
           );
@@ -70,7 +70,7 @@ function formatInline(text: string): ReactNode {
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
-        <code key={i} className="rounded bg-slate-100 px-1 text-[11px] text-teal-900">
+        <code key={i} className="rounded bg-slate-200 px-1 text-[11px] text-blue-700">
           {part.slice(1, -1)}
         </code>
       );

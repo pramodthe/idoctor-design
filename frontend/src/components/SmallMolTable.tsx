@@ -18,7 +18,7 @@ function verdictFor(
 const VERDICT_BADGE: Record<string, string> = {
   promote: "bg-emerald-50 text-emerald-700 border-emerald-200",
   reject: "bg-red-50 text-red-700 border-red-200",
-  hold: "bg-slate-100 text-slate-600 border-slate-200",
+  hold: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 export default function SmallMolTable({
@@ -37,7 +37,7 @@ export default function SmallMolTable({
     <div className="overflow-x-auto">
       <table className="w-full min-w-[560px] text-left text-xs">
         <thead>
-          <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+          <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
             <th className="pb-2 pr-3 font-semibold">Compound</th>
             <th className="pb-2 pr-3 font-semibold">Vina WT</th>
             <th className="pb-2 pr-3 font-semibold">Ki (nM)</th>
@@ -55,11 +55,11 @@ export default function SmallMolTable({
             return (
               <tr
                 key={c.id}
-                className="border-b border-slate-100 last:border-0"
+                className="border-b border-slate-200/60 last:border-0"
               >
                 <td className="py-2.5 pr-3">
-                  <div className="font-medium text-slate-900">{c.name}</div>
-                  <div className="font-mono text-[10px] text-slate-400">{c.id}</div>
+                  <div className="font-medium text-slate-800">{c.name}</div>
+                  <div className="font-mono text-[10px] text-slate-500">{c.id}</div>
                 </td>
                 <td className="py-2.5 pr-3 font-mono text-slate-700">
                   {c.vina_wt != null ? c.vina_wt.toFixed(1) : "—"}
@@ -79,7 +79,7 @@ export default function SmallMolTable({
                       {v.verdict}
                     </span>
                   ) : (
-                    <span className="text-slate-300">—</span>
+                    <span className="text-slate-600">—</span>
                   )}
                 </td>
               </tr>
@@ -87,7 +87,7 @@ export default function SmallMolTable({
           })}
         </tbody>
       </table>
-      <p className="mt-2 text-[10px] text-slate-400">
+      <p className="mt-2 text-[10px] text-slate-500">
         Sorted by experimental Ki (nM), not Vina. WT = KRAS G12C without extra resistance mutation.
       </p>
     </div>

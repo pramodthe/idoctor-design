@@ -1,17 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f7f8;
+  --background: #f3f6f9;
   --foreground: #0f172a;
-  --card: #ffffff;
-  --card-border: #d8e0e4;
-  --primary: #0f766e;
-  --primary-muted: #115e59;
-  --success: #047857;
-  --danger: #b91c1c;
+  --card: rgba(255, 255, 255, 0.85);
+  --card-border: rgba(255, 255, 255, 0.9);
   --muted: #64748b;
-  --ink: #0c1222;
-  --signal: #b91c1c;
+  --ink: #0f172a;
+  --cobalt: #2563eb;
+  --pink: #ff3b69;
+  --green: #10b981;
+  --amber: #f59e0b;
 }
 
 @theme inline {
@@ -19,29 +18,37 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-display);
+  --font-display: var(--font-geist-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-.font-display {
-  font-family: var(--font-display), Georgia, serif;
-}
-
-/* Soft lab atmosphere: teal wash + ink grain */
+/* Luminous Ambient Mesh Background */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -2;
   background:
-    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(15, 118, 110, 0.12), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(15, 23, 42, 0.06), transparent 50%),
-    linear-gradient(180deg, #eef4f5 0%, #f4f7f8 40%, #eef2f4 100%);
+    radial-gradient(circle at 35% 25%, rgba(56, 189, 248, 0.14) 0%, transparent 45%),
+    radial-gradient(circle at 75% 65%, rgba(52, 211, 153, 0.12) 0%, transparent 40%),
+    radial-gradient(circle at 15% 75%, rgba(255, 59, 105, 0.08) 0%, transparent 35%),
+    linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
 }
 
 body::after {
@@ -49,23 +56,166 @@ body::after {
   position: fixed;
   inset: 0;
   z-index: -1;
-  opacity: 0.35;
-  background-image: radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.045) 1px, transparent 0);
-  background-size: 28px 28px;
+  background-image: radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.28) 1px, transparent 0);
+  background-size: 20px 20px;
   pointer-events: none;
 }
 
-@keyframes scan {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100%); }
+/* Frosted Glass Acrylic Materiality */
+.flowtune-glass {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px) saturate(190%);
+  -webkit-backdrop-filter: blur(20px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 20px 40px -12px rgba(15, 23, 42, 0.06),
+    0 4px 12px -2px rgba(15, 23, 42, 0.02),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
 }
-.scan-line {
-  animation: scan 2s ease-in-out infinite;
+
+.flowtune-subcard {
+  background: rgba(248, 250, 252, 0.88);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 14px;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.02);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.flowtune-subcard:hover {
+  background: #ffffff;
+  border-color: rgba(199, 210, 254, 0.9);
+  box-shadow: 0 6px 16px -2px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.flowtune-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  transition: all 0.15s ease;
+}
+.flowtune-pill:hover {
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.chrome-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  width: 30px;
+  border-radius: 10px;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  transition: all 0.15s ease;
+}
+.chrome-btn:hover {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+}
+
+.ink-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+  transition: all 0.15s ease;
+}
+.ink-btn:hover {
+  background: #1e293b;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+}
+
+.float-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 45px -8px rgba(15, 23, 42, 0.06);
+  border-radius: 24px;
+}
+
+.soft-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 12px 35px -6px rgba(15, 23, 42, 0.05);
+  border-radius: 20px;
+}
+
+/* ReactFlow Canvas & Nodes */
+.agent-lineage .react-flow__node {
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.agent-lineage .react-flow__node:hover {
+  transform: translateY(-2px);
+}
+.agent-lineage .react-flow__attribution {
+  display: none;
+}
+.agent-lineage .react-flow__controls {
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+}
+.agent-lineage .react-flow__controls-button {
+  background: transparent;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  fill: #475569;
+  width: 32px;
+  height: 32px;
+}
+.agent-lineage .react-flow__controls-button:hover {
+  background: #ffffff;
+}
+
+.agent-lineage .react-flow__background {
+  background: transparent !important;
+}
+
+/* Edge Floating Metric Pills */
+.edge-metric-pill {
+  position: absolute;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  font-size: 10px;
+  font-weight: 600;
+  color: #475569;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
 }
 
 @keyframes pulse-ring {
   0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(2.5); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
 }
 .pulse-ring::after {
   content: "";
@@ -73,37 +223,20 @@ body::after {
   inset: 0;
   border-radius: 9999px;
   border: 1.5px solid currentColor;
-  animation: pulse-ring 1.5s ease-out infinite;
+  animation: pulse-ring 1.8s ease-out infinite;
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
-.shimmer-bar {
-  background: linear-gradient(90deg, transparent 30%, rgba(15, 118, 110, 0.25) 50%, transparent 70%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
 }
-.animate-fade-in { animation: fadeInUp 0.45s ease-out forwards; }
-.animate-fade-in-delay-1 { animation-delay: 0.08s; opacity: 0; animation-fill-mode: forwards; }
-.animate-fade-in-delay-2 { animation-delay: 0.16s; opacity: 0; animation-fill-mode: forwards; }
-.animate-fade-in-delay-3 { animation-delay: 0.24s; opacity: 0; animation-fill-mode: forwards; }
-
-@keyframes bannerPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.55);
 }
-.demo-banner {
-  animation: bannerPulse 3s ease-in-out infinite;
-}
-
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.25); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.4); }

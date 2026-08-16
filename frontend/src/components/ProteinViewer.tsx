@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 
 interface ProteinViewerProps {
   pdbData: string | null;
+  binderPdb?: string | null;
+  complexMode?: boolean;
   bindingResidues?: string[];
   showLigand?: boolean;
   ligandId?: string;
@@ -41,6 +43,8 @@ function parseResi(name: string): number | null {
 
 export default function ProteinViewer({
   pdbData,
+  binderPdb = null,
+  complexMode = false,
   bindingResidues = [],
   showLigand = false,
   ligandId = "ARS",
@@ -66,9 +70,19 @@ export default function ProteinViewer({
     viewer.addModel(pdbDataRef.current, "pdb");
 
     if (showProtein) {
-      viewer.setStyle({}, { cartoon: { color: "spectrum", opacity: focusedResidue ? 0.4 : 0.85 } });
+      if (complexMode) {
+        viewer.setStyle({ model: 0, chain: "A" }, { cartoon: { color: "0x60a5fa", opacity: focusedResidue ? 0.4 : 0.9 } });
+        viewer.setStyle({ model: 0, chain: "B" }, { cartoon: { color: "0x34d399", opacity: focusedResidue ? 0.55 : 0.95 } });
+      } else {
+        viewer.setStyle({ model: 0 }, { cartoon: { color: "0x94a3b8", opacity: focusedResidue ? 0.4 : 0.85 } });
+      }
     } else {
-      viewer.setStyle({}, {});
+      viewer.setStyle({ model: 0 }, {});
+    }
+
+    if (binderPdb) {
+      viewer.addModel(binderPdb, "pdb");
+      viewer.setStyle({ model: 1 }, { cartoon: { color: "0x0f766e", opacity: 0.9 } });
     }
 
     if (showResidues && bindingResidues.length > 0) {
@@ -121,7 +135,7 @@ export default function ProteinViewer({
     }
 
     viewer.render();
-  }, [showProtein, showResidues, showLigandToggle, showLigand, bindingResidues, focusedResidue]);
+  }, [showProtein, showResidues, showLigandToggle, showLigand, bindingResidues, focusedResidue, binderPdb, complexMode]);
 
   // Initial load
   useEffect(() => {
@@ -143,7 +157,16 @@ export default function ProteinViewer({
       pdbDataRef.current = pdbData;
       const viewer = viewerRef.current;
       viewer.addModel(pdbData, "pdb");
-      viewer.setStyle({}, { cartoon: { color: "spectrum", opacity: 0.85 } });
+      if (complexMode) {
+        viewer.setStyle({ model: 0, chain: "A" }, { cartoon: { color: "0x60a5fa", opacity: 0.9 } });
+        viewer.setStyle({ model: 0, chain: "B" }, { cartoon: { color: "0x34d399", opacity: 0.95 } });
+      } else {
+        viewer.setStyle({ model: 0 }, { cartoon: { color: "0x94a3b8", opacity: 0.85 } });
+      }
+      if (binderPdb) {
+        viewer.addModel(binderPdb, "pdb");
+        viewer.setStyle({ model: 1 }, { cartoon: { color: "0x0f766e", opacity: 0.9 } });
+      }
 
       if (bindingResidues.length > 0) {
         for (const resName of bindingResidues) {
@@ -165,7 +188,7 @@ export default function ProteinViewer({
     })();
 
     return () => { cancelled = true; };
-  }, [pdbData, bindingResidues, showLigand]);
+  }, [pdbData, binderPdb, bindingResidues, showLigand, complexMode]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -177,7 +200,7 @@ export default function ProteinViewer({
       viewer.addModel(pdbDataRef.current, "pdb");
 
       // Dim the protein
-      viewer.setStyle({}, { cartoon: { color: "spectrum", opacity: 0.5 } });
+      viewer.setStyle({}, { cartoon: { color: "0x94a3b8", opacity: 0.5 } });
 
       // Show binding site residues
       for (const resName of bindingResidues) {
@@ -222,27 +245,27 @@ export default function ProteinViewer({
   };
 
   return (
-    <div className="glow-card relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div ref={containerRef} className="h-[320px] w-full sm:h-[400px] lg:h-[480px]" style={{ position: "relative" }} />
+    <div className="glow-card relative h-full overflow-hidden rounded-2xl shadow-sm">
+      <div ref={containerRef} className="h-full min-h-[300px] w-full" style={{ position: "relative" }} />
 
       {!loaded && pdbData && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
             <span className="text-xs text-slate-400">Loading KRAS G12C structure...</span>
           </div>
         </div>
       )}
 
       {!pdbData && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-50">
-          <span className="text-sm text-slate-400">KRAS G12C (6OIM) viewer — start the API to load PDB</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900/60">
+          <span className="text-sm text-slate-500">KRAS G12C (6OIM) viewer — start the API to load PDB</span>
         </div>
       )}
 
       {dockingLoading && (
-        <div className="absolute right-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-blue-200 bg-white/90 px-3 py-2 text-xs text-blue-600 shadow-sm backdrop-blur-sm">
-          <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-teal-500/30 bg-black/70 px-3 py-2 text-xs text-teal-300 shadow-sm backdrop-blur-sm">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
           Docking compound...
         </div>
       )}
@@ -317,7 +340,7 @@ export default function ProteinViewer({
       )}
 
       {loaded && (
-        <div className="absolute bottom-3 right-3 rounded-md border border-slate-200/80 bg-white/80 px-2 py-1 text-[10px] text-slate-400 backdrop-blur-sm">
+        <div className="absolute bottom-3 right-3 rounded-md border border-slate-700 bg-black/60 px-2 py-1 text-[10px] text-slate-400 backdrop-blur-sm">
           {focusedResidue ? "Click badge again to reset" : "Click residue to zoom"}
         </div>
       )}
@@ -331,10 +354,10 @@ function Tooltip({ text, children }: { text?: string; children: React.ReactNode 
     <div className="group/tip relative">
       {children}
       <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 opacity-0 transition-opacity group-hover/tip:opacity-100">
-        <div className="max-w-[200px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] leading-relaxed text-slate-600 shadow-lg">
+        <div className="max-w-[200px] rounded-lg border border-slate-700 bg-[#0b141d] px-3 py-2 text-[10px] leading-relaxed text-slate-300 shadow-xl">
           {text}
         </div>
-        <div className="mx-auto h-2 w-2 -translate-y-1 rotate-45 border-b border-r border-slate-200 bg-white" />
+        <div className="mx-auto h-2 w-2 -translate-y-1 rotate-45 border-b border-r border-slate-700 bg-[#0b141d]" />
       </div>
     </div>
   );
@@ -345,7 +368,7 @@ function ViewToggle({ label, active, color, onToggle }: { label: string; active:
     <button
       onClick={onToggle}
       className={`flex items-center gap-2 rounded-md border px-2 py-1 text-[10px] font-medium backdrop-blur-sm transition-all ${
-        active ? "border-slate-300 bg-white/90 text-slate-700 shadow-sm" : "border-slate-200/60 bg-white/60 text-slate-400"
+        active ? "border-slate-500 bg-black/60 text-slate-200 shadow-sm" : "border-slate-700/60 bg-black/30 text-slate-500"
       }`}
     >
       <div

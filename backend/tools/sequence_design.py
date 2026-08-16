@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-FIXTURE_DESIGNS = REPO_ROOT / "spec" / "fixtures" / "designs.example.json"
+from backend.config import FIXTURES_DIR
+
+FIXTURE_DESIGNS = FIXTURES_DIR / "designs.example.json"
 
 AA = "ACDEFGHIKLMNPQRSTVWY"
 HYDROPHOBIC = set("AILMFVWY")
@@ -33,7 +33,7 @@ def _fixture_sequences() -> set[str]:
         for d in data.get("designs") or []:
             if d.get("sequence"):
                 seqs.add(d["sequence"])
-    fasta = REPO_ROOT / "spec" / "fixtures" / "designs.example.fasta"
+    fasta = FIXTURES_DIR / "designs.example.fasta"
     if fasta.is_file():
         cur: list[str] = []
         for line in fasta.read_text().splitlines():
@@ -80,10 +80,18 @@ class _Rng:
         return a + (self.next() % (b - a + 1))
 
 
-def _motif_for_pocket(pocket: list[str], rng: _Rng) -> str:
+def _motif_for_pocket(
+    pocket: list[str], rng: _Rng, failure_codes: set[str] | None = None
+) -> str:
     """Charged/aromatic motifs biased toward pocket residues (humble heuristics)."""
     motifs: list[str] = []
+    failure_codes = failure_codes or set()
     joined = " ".join(pocket).lower()
+    if "wt_only_signal" in failure_codes:
+        # Y96D introduces a negative side chain; bias the next proposal round
+        # toward complementary basic/aromatic contacts. This is a hypothesis,
+        # not evidence that the interaction will work.
+        motifs.append("RKWK")
     if "tyr96" in joined or "tyr" in joined:
         motifs.append("DY" + rng.choice("FWY") + "E")
     if "his95" in joined or "his" in joined:
@@ -117,8 +125,10 @@ def _build_sequence(
     molecule_type: str,
     pocket: list[str],
     index: int,
+    failure_codes: set[str] | None = None,
 ) -> str:
-    motif = _motif_for_pocket(pocket, rng)
+    failure_codes = failure_codes or set()
+    motif = _motif_for_pocket(pocket, rng, failure_codes)
     if molecule_type == "peptide":
         core_len = rng.randint(18, 28)
         seq = "GSHM" + motif + _helix_block(rng, core_len) + _linker(rng, 3) + rng.choice("C" + AA)
@@ -128,7 +138,12 @@ def _build_sequence(
             "GSHMAS",
             _linker(rng, 4),
             motif,
-            _helix_block(rng, rng.randint(12, 18)),
+            _helix_block(
+                rng,
+                rng.randint(16, 22)
+                if failure_codes & {"low_iptm", "low_structure_confidence"}
+                else rng.randint(12, 18),
+            ),
             _linker(rng, 4),
             _helix_block(rng, rng.randint(12, 18)),
             motif[::-1] if len(motif) >= 3 else motif,
@@ -179,10 +194,29 @@ def estimate_fold_metrics(sequence: str) -> dict[str, float]:
     }
 
 
-def generate_designs(scientific_spec: dict[str, Any], n: int = 8) -> dict[str, Any]:
+def generate_designs(
+    scientific_spec: dict[str, Any],
+    n: int = 8,
+    extra_seed: int = 0,
+    feedback: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Generate ≥8 novel designs from a scientific_spec. Deterministic, not fixture copies."""
     n = max(8, int(n))
-    seed = _seed_int(scientific_spec)
+    feedback = feedback or {}
+    failure_codes = {str(code) for code in (feedback.get("priority_codes") or [])}
+    feedback_blob = json.dumps(
+        {
+            "priority_codes": sorted(failure_codes),
+            "parent_ids": sorted(str(x) for x in (feedback.get("parent_ids") or [])),
+        },
+        sort_keys=True,
+    )
+    feedback_offset = int(hashlib.sha256(feedback_blob.encode()).hexdigest()[:8], 16)
+    seed = (
+        _seed_int(scientific_spec)
+        + int(extra_seed) * 10007
+        + feedback_offset
+    ) % (2**32 - 1) or 1
     rng = _Rng(seed)
     pocket = [str(p) for p in (scientific_spec.get("pocket_residues") or [])]
     banned = _fixture_sequences()
@@ -192,8 +226,11 @@ def generate_designs(scientific_spec: dict[str, Any], n: int = 8) -> dict[str, A
     i = 0
     while len(designs) < n and attempts < n * 20:
         attempts += 1
-        molecule_type = "peptide" if (i % 2 == 1) else "miniprotein"
-        seq = _build_sequence(rng, molecule_type, pocket, i)
+        if failure_codes & {"low_iptm", "low_structure_confidence"}:
+            molecule_type = "miniprotein"
+        else:
+            molecule_type = "peptide" if (i % 2 == 1) else "miniprotein"
+        seq = _build_sequence(rng, molecule_type, pocket, i, failure_codes)
         if seq in banned or any(seq == d["sequence"] for d in designs):
             # Reseed nudge
             _ = rng.next()
@@ -212,7 +249,7 @@ def generate_designs(scientific_spec: dict[str, Any], n: int = 8) -> dict[str, A
 
         designs.append(
             {
-                "id": f"des_live_{i + 1:03d}",
+                "id": f"des_r{int(extra_seed) + 1:02d}_{i + 1:03d}",
                 "sequence": seq,
                 "length": len(seq),
                 "molecule_type": molecule_type,
@@ -250,6 +287,11 @@ def generate_designs(scientific_spec: dict[str, Any], n: int = 8) -> dict[str, A
         "meta": {
             "engine": "sequence_design",
             "design_engine": "sequence_design",
+            "extra_seed": int(extra_seed),
+            "redesign_feedback": {
+                "priority_codes": sorted(failure_codes),
+                "parent_ids": list(feedback.get("parent_ids") or []),
+            },
         },
     }
 

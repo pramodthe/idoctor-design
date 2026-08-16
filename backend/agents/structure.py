@@ -11,7 +11,7 @@ from backend.tools import tamarind
 
 
 AGENT_NAME = "structure"
-AGENT_DISPLAY = "Fold & complex (Tamarind)"
+AGENT_DISPLAY = "Fold metrics"
 
 
 def run_structure(state: dict, progress_cb=None) -> dict:
@@ -37,12 +37,48 @@ def run_structure(state: dict, progress_cb=None) -> dict:
         d.get("provenance") == "live" for d in (designs_doc.get("designs") or [])
     )
 
+    def _already_folded(doc: dict) -> bool:
+        rows = doc.get("designs") or []
+        if not rows:
+            return False
+        # Locally-estimated pLDDT/ipTM must not suppress a real structure job.
+        # Only reuse a structure artifact or a metric explicitly stamped by a
+        # non-heuristic predictor.
+        return all(
+            bool(d.get("pdb_path"))
+            or (
+                bool(d.get("fold_method"))
+                and "heuristic" not in str(d.get("fold_method")).lower()
+                and "fixture" not in str(d.get("fold_method")).lower()
+            )
+            for d in rows
+        )
+
     if mode == "replay":
         node_source = "cached"
         steps.append({"action": "Reuse cached structure metrics", "detail": str(structures_dir)})
     else:
         live_ok = False
-        if mode == "live" and FAST_DEV:
+        if mode == "live" and _already_folded(designs_doc):
+            node_source = "live"
+            live_ok = True
+            (structures_dir / "README.txt").write_text(
+                "Tamarind fold skipped — designs already have pdb_path / ipTM / pLDDT "
+                "from the generator (e.g. ESMFold2 binder design). Not a second fold job.\n"
+            )
+            steps.append(
+                {
+                    "action": "Reuse generator structures",
+                    "detail": "Skipped Tamarind fold; metrics already on designs.json",
+                }
+            )
+            tool_calls.append(
+                {
+                    "tool": "tamarind.submit_fold",
+                    "detail": "skipped — structure already present",
+                }
+            )
+        elif mode == "live" and FAST_DEV:
             steps.append(
                 {
                     "action": "Tamarind folds skipped (IDOCTOR_FAST)",
@@ -157,6 +193,7 @@ def run_structure(state: dict, progress_cb=None) -> dict:
         "output_summary": f"structures dir ready; node={node_source}",
         "steps": steps,
         "tool_calls": tool_calls,
+        "llm_calls": [],
     }
     traces = list(state.get("agent_traces") or [])
     traces.append(trace)

@@ -9,13 +9,18 @@ DATA_DIR = BASE_DIR / "data"
 RUNS_DIR = DATA_DIR / "runs"
 PRECOMPUTED_DIR = DATA_DIR / "precomputed"
 PDB_CACHE_DIR = DATA_DIR / "pdb_cache"
-FIXTURES_DIR = BASE_DIR / "spec" / "fixtures"
+_SPEC_FIXTURES_DIR = BASE_DIR / "spec" / "fixtures"
+_FRONTEND_FIXTURES_DIR = BASE_DIR / "frontend" / "public" / "fixtures"
+FIXTURES_DIR = (
+    _SPEC_FIXTURES_DIR if _SPEC_FIXTURES_DIR.is_dir() else _FRONTEND_FIXTURES_DIR
+)
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 PAPERCLIP_API_KEY = os.getenv("PAPERCLIP_API_KEY", "")
 PAPERCLIP_BASE_URL = os.getenv("PAPERCLIP_BASE_URL", "")
+PAPERCLIP_MCP_URL = os.getenv("PAPERCLIP_MCP_URL", "https://paperclip.gxl.ai/mcp").rstrip("/")
 TAMARIND_API_KEY = os.getenv("TAMARIND_API_KEY", "")
 MODAL_TOKEN_ID = os.getenv("MODAL_TOKEN_ID", "")
 MODAL_TOKEN_SECRET = os.getenv("MODAL_TOKEN_SECRET", "")
@@ -56,11 +61,39 @@ SCORING_VERSION = "vina_v1"
 
 RCSB_BASE_URL = "https://files.rcsb.org/download"
 
-# Dev loop switch. With IDOCTOR_FAST=1 a live run skips the three network-bound
-# nodes: Tamarind folds (~18 min), literature search (~30s) and the critic's LLM
-# summary polish (~9s). Everything still runs and every skip is recorded in
-# provenance, so a fast run is honest about being degraded — never demo from one.
+# Dev loop switch. With IDOCTOR_FAST=1 a live run skips expensive/network-bound
+# verification such as Tamarind folds and complexes, RCSB novelty, literature
+# search, and critic prose polishing. Every skip is recorded in provenance and
+# prevents promotion, so a fast run is honest about being degraded.
 FAST_DEV = os.getenv("IDOCTOR_FAST", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    try:
+        return max(0.0, float(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+# Loop-engineering budgets. The initial design is iteration 1, so three
+# iterations means at most two critic-requested redesigns.
+MAX_DESIGN_ITERATIONS = _positive_int_env("IDOCTOR_MAX_DESIGN_ITERATIONS", 3)
+MAX_NO_IMPROVEMENT_ROUNDS = _positive_int_env(
+    "IDOCTOR_MAX_NO_IMPROVEMENT_ROUNDS", 2
+)
+DEFAULT_MIN_IPTM = _positive_float_env("IDOCTOR_MIN_IPTM", 0.75)
+MAX_COMPLEX_DESIGNS = _positive_int_env("IDOCTOR_MAX_COMPLEX_DESIGNS", 1)
+MAX_COMPLEX_MUTANTS = _positive_int_env("IDOCTOR_MAX_COMPLEX_MUTANTS", 2)
+COMPLEX_EVALUATION_TIMEOUT = _positive_int_env(
+    "IDOCTOR_COMPLEX_EVALUATION_TIMEOUT", 1800
+)
 
 KNOWN_TARGETS = {
     "6OIM": {

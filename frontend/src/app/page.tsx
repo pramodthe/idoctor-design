@@ -1,459 +1,433 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
-  AppState,
-  AgentStatusMap,
-  IDoctorDesignResults,
-  RunMode,
   AgentStatus,
+  AgentStatusMap,
+  AppState,
+  IDoctorDesignResults,
+  LabLogEvent,
+  RunMode,
 } from "@/lib/types";
 import { INITIAL_AGENT_STATUS } from "@/lib/types";
 import {
-  getProteinPDB,
-  runWithFixtureFallback,
   downloadBlob,
-  isDemoData,
+  getProteinPDB,
+  loadFixtureResults,
   loadLatestRun,
+  runWithFixtureFallback,
 } from "@/lib/api";
-import Header from "@/components/Header";
-import ProteinViewer from "@/components/ProteinViewer";
-import AgentStatusPanel from "@/components/AgentStatusPanel";
-import OnboardingModal from "@/components/OnboardingModal";
-import MutationMap from "@/components/MutationMap";
-import SmallMolTable from "@/components/SmallMolTable";
-import DesignTable from "@/components/DesignTable";
-import RejectDrawer from "@/components/RejectDrawer";
+import AgentLineage from "@/components/AgentLineage";
+import AppShell from "@/components/AppShell";
+import ComplexResultsPanel from "@/components/ComplexResultsPanel";
 import ExperimentCard from "@/components/ExperimentCard";
-import EvalPanel from "@/components/EvalPanel";
+import Header from "@/components/Header";
+import LabLog from "@/components/LabLog";
+import { tracesToLabLog } from "@/lib/labLog";
 
 const DEFAULT_PDB = "6OIM";
-const HYPOTHESIS_TEASER =
-  "Switch II small-molecule drugs that work on KRAS G12C lose binding when pocket residues such as Y96 change; a designed miniprotein that uses a larger surface can keep contacts outside the sotorasib epitope and should be tested on Y96D, not only on wild-type G12C.";
+
+function completedAgentMap(): AgentStatusMap {
+  return Object.fromEntries(
+    (Object.keys(INITIAL_AGENT_STATUS) as (keyof AgentStatusMap)[]).map((agent) => [
+      agent,
+      "completed" as AgentStatus,
+    ])
+  ) as unknown as AgentStatusMap;
+}
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("idle");
-  const [agentStatus, setAgentStatus] =
-    useState<AgentStatusMap>(INITIAL_AGENT_STATUS);
+  const [agentStatus, setAgentStatus] = useState<AgentStatusMap>(INITIAL_AGENT_STATUS);
   const [results, setResults] = useState<IDoctorDesignResults | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
-  const [pdbData, setPdbData] = useState<string | null>(null);
-  const [usedLocalFixtures, setUsedLocalFixtures] = useState(false);
+  const [targetPdb, setTargetPdb] = useState<string | null>(null);
+  const [labLog, setLabLog] = useState<LabLogEvent[]>([]);
+  const [activeMode, setActiveMode] = useState<RunMode | null>(null);
+  const [copiedSeq, setCopiedSeq] = useState(false);
   const runGeneration = useRef(0);
 
-  useEffect(() => {
-    getProteinPDB(DEFAULT_PDB)
-      .then(setPdbData)
-      .catch(() => setPdbData(null));
-  }, []);
-
-  const handleRun = useCallback(async (mode: RunMode) => {
-    const gen = ++runGeneration.current;
-    setShowOnboarding(false);
-    setAppState("running");
-    setError(null);
-    setResults(null);
-    setAgentStatus(INITIAL_AGENT_STATUS);
+  const applyResults = useCallback((loaded: IDoctorDesignResults) => {
+    setResults(loaded);
+    setAgentStatus(completedAgentMap());
+    setActiveMode(loaded.provenance?.mode || "fixture");
+    setLabLog(
+      loaded.lab_log?.length ? loaded.lab_log : tracesToLabLog(loaded.agent_traces)
+    );
+    setAppState("completed");
     setCurrentStep(null);
-    setUsedLocalFixtures(false);
-
-    try {
-      const res = await runWithFixtureFallback(
-        mode,
-        (agent, status) => {
-          if (gen !== runGeneration.current) return;
-          setAgentStatus((prev) => {
-            if (!(agent in prev)) return prev;
-            return { ...prev, [agent]: status as AgentStatus };
-          });
-        },
-        (step) => {
-          if (gen !== runGeneration.current) return;
-          setCurrentStep(step);
-        }
-      );
-      if (gen !== runGeneration.current) return;
-      if (res.provenance?.mode === "fixture") {
-        setUsedLocalFixtures(true);
-      }
-      setResults(res);
-      setAppState("completed");
-    } catch (err) {
-      if (gen !== runGeneration.current) return;
-      setError(err instanceof Error ? err.message : "Failed to run pipeline");
-      setAppState("idle");
-    }
   }, []);
 
-  // On first load: show the newest saved run instead of always re-running.
-  // Overrides: ?run=live | ?run=fixture | ?run=replay | ?run=none
-  // Use a cancelled flag so React Strict Mode remounts don't leave the UI stuck on idle.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    getProteinPDB(DEFAULT_PDB).then(setTargetPdb).catch(() => setTargetPdb(null));
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
-    const params = new URLSearchParams(window.location.search);
-    const run = params.get("run");
-    if (run === "none") return;
-
-    if (run === "live" || run === "fixture" || run === "replay") {
-      void handleRun(run);
-      return () => {
-        cancelled = true;
-        runGeneration.current += 1;
-      };
-    }
-
-    void (async () => {
-      setAppState("running");
-      setCurrentStep("Loading latest run…");
-      const latest = await loadLatestRun();
-      if (cancelled) return;
-      if (latest) {
-        setAgentStatus(
-          Object.fromEntries(
-            (Object.keys(INITIAL_AGENT_STATUS) as (keyof AgentStatusMap)[]).map(
-              (a) => [a, "completed" as AgentStatus]
-            )
-          ) as unknown as AgentStatusMap
+    async function initData() {
+      try {
+        const latest = await loadLatestRun();
+        if (cancelled) return;
+        if (latest) {
+          applyResults(latest);
+          setDataNotice(null);
+          return;
+        }
+        const fixture = await loadFixtureResults();
+        if (cancelled) return;
+        applyResults(fixture);
+        setDataNotice("No saved run was found. Showing the demo fixture explicitly.");
+      } catch {
+        const fixture = await loadFixtureResults();
+        if (cancelled) return;
+        applyResults(fixture);
+        setDataNotice(
+          "Backend is offline, so this is demo fixture data—not a live scientific result. Start FastAPI on port 8080 and load the latest run."
         );
-        setResults(latest);
-        setUsedLocalFixtures(latest.provenance?.mode === "fixture");
-        setAppState("completed");
-        setCurrentStep(null);
-        return;
       }
-      void handleRun("fixture");
-    })();
-
+    }
+    void initData();
     return () => {
       cancelled = true;
     };
-  }, [handleRun]);
+  }, [applyResults]);
+
+  const handleRun = useCallback(
+    async (mode: RunMode) => {
+      const generation = ++runGeneration.current;
+      setAppState("running");
+      setError(null);
+      setDataNotice(null);
+      setResults(null);
+      setAgentStatus(INITIAL_AGENT_STATUS);
+      setCurrentStep(null);
+      setLabLog([]);
+      setActiveMode(mode);
+
+      try {
+        const run = await runWithFixtureFallback(
+          mode,
+          (agent, status) => {
+            if (generation !== runGeneration.current) return;
+            setAgentStatus((previous) => {
+              if (!(agent in previous)) return previous;
+              return { ...previous, [agent]: status as AgentStatus };
+            });
+          },
+          (step) => {
+            if (generation === runGeneration.current) setCurrentStep(step);
+          },
+          (events) => {
+            if (generation === runGeneration.current) setLabLog(events);
+          }
+        );
+        if (generation !== runGeneration.current) return;
+        applyResults(run);
+      } catch (runError) {
+        if (generation !== runGeneration.current) return;
+        setError(
+          runError instanceof Error ? runError.message : "The pipeline could not be started."
+        );
+        setAppState("idle");
+      }
+    },
+    [applyResults]
+  );
+
+  const handleLoadLatest = useCallback(async () => {
+    setError(null);
+    setDataNotice(null);
+    setCurrentStep("Loading latest saved run…");
+    setAppState("running");
+    try {
+      const latest = await loadLatestRun();
+      if (!latest) throw new Error("No complete saved run is available.");
+      applyResults(latest);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Could not reach the iDoctor backend."
+      );
+      setAppState(results ? "completed" : "idle");
+      setCurrentStep(null);
+    }
+  }, [applyResults, results]);
 
   const handleReset = useCallback(() => {
+    runGeneration.current += 1;
     setAppState("idle");
     setResults(null);
     setAgentStatus(INITIAL_AGENT_STATUS);
     setError(null);
+    setDataNotice(null);
     setCurrentStep(null);
-    setUsedLocalFixtures(false);
+    setLabLog([]);
+    setActiveMode(null);
   }, []);
-
-  const showDemoBanner =
-    results &&
-    (isDemoData(results.provenance) || usedLocalFixtures);
-
-  const pocketResidues =
-    results?.scientific_spec?.pocket_residues ?? ["Cys12", "His95", "Tyr96", "Asp69"];
 
   function handleDownloads() {
     if (!results) return;
-    downloadBlob(
-      JSON.stringify(results.scientific_spec, null, 2),
-      "spec.json",
-      "application/json"
-    );
+    const stem = results.run_id || "idoctor";
+    downloadBlob(JSON.stringify(results.scientific_spec, null, 2), `${stem}-spec.json`, "application/json");
     const fasta = (results.designs?.designs || [])
-      .map((d) => `>${d.id}\n${d.sequence}`)
+      .map((design) => `>${design.id}\n${design.sequence}`)
       .join("\n");
-    downloadBlob(fasta, "designs.fasta", "text/plain");
-    downloadBlob(
-      JSON.stringify(results.verdicts, null, 2),
-      "verdicts.json",
-      "application/json"
-    );
-    downloadBlob(results.experiment_md || "", "experiment.md", "text/markdown");
+    downloadBlob(fasta, `${stem}-designs.fasta`, "text/plain");
+    downloadBlob(JSON.stringify(results.verdicts, null, 2), `${stem}-verdicts.json`, "application/json");
+    downloadBlob(JSON.stringify(results.complex_scores || {}, null, 2), `${stem}-complex-scores.json`, "application/json");
   }
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      {showOnboarding && (
-        <OnboardingModal onDismiss={() => setShowOnboarding(false)} />
-      )}
-      <Header appState={appState} />
+  const designs = results?.designs?.designs || [];
+  const allVerdicts = results?.verdicts?.items || [];
+  const designVerdicts = allVerdicts.filter((item) => item.subject_kind === "design");
+  const promotedIds = new Set(
+    designVerdicts.filter((item) => item.verdict === "promote").map((item) => item.subject_id)
+  );
+  const promotedDesigns = designs.filter((design) => promotedIds.has(design.id));
+  const rejectedDesigns = designs.filter((design) =>
+    designVerdicts.some((item) => item.subject_id === design.id && item.verdict === "reject")
+  );
+  const heldDesigns = designs.filter((design) =>
+    designVerdicts.some((item) => item.subject_id === design.id && item.verdict === "hold")
+  );
+  const focusDesign = promotedDesigns[0] || designs[0];
+  const focusVerdict = designVerdicts.find((item) => item.subject_id === focusDesign?.id);
+  const bestIptm = Math.max(
+    ...designs
+      .map((design) => design.iptm)
+      .filter((value): value is number => typeof value === "number"),
+    0
+  );
+  const liveNodes = Object.values(results?.provenance?.nodes || {}).filter(
+    (node) => node === "live" || node === "cached"
+  ).length;
+  const termination =
+    results?.loop_termination_reason || results?.verdicts?.loop?.termination_reason;
+  const runRejected = focusVerdict?.verdict === "reject";
+  const runPromoted = promotedDesigns.length > 0;
+  const pocketResidues =
+    results?.scientific_spec?.pocket_residues || ["Cys12", "His95", "Tyr96", "Asp69"];
+  const headline = runPromoted
+    ? `${promotedDesigns.length} candidate${promotedDesigns.length === 1 ? "" : "s"} cleared every gate`
+    : runRejected
+      ? "Candidate falsified by the resistance panel"
+      : appState === "running"
+        ? "The AI scientist is collecting evidence"
+        : "No candidate has cleared the promotion gates";
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
+  return (
+    <AppShell
+      topBar={
+        <Header
+          appState={appState}
+          mode={results?.provenance?.mode || activeMode}
+          spec={results?.scientific_spec}
+          runId={results?.run_id}
+          agentStatus={agentStatus}
+          currentStep={currentStep}
+          labLog={labLog}
+          onRunLive={() => void handleRun("live")}
+          onRunFixture={() => void handleRun("fixture")}
+          onLoadLatest={() => void handleLoadLatest()}
+          onDownload={handleDownloads}
+          onReset={handleReset}
+          canDownload={Boolean(results)}
+        />
+      }
+    >
+      <div className="mx-auto max-w-[1680px] space-y-4">
+        {dataNotice && (
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
+            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+            <div><strong className="font-bold">Data source warning.</strong> {dataNotice}</div>
+          </div>
+        )}
         {error && (
-          <div className="mb-6 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800 shadow-sm">
             {error}
           </div>
         )}
 
-        {showDemoBanner && (
-          <div className="demo-banner mb-6 border-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-            Demo data — provenance mode is{" "}
-            <span className="font-mono">{results!.provenance.mode}</span>
-            {Object.values(results!.provenance.nodes || {}).some(
-              (n) => n === "fixture"
-            ) && (
-              <span>
-                {" "}
-                (one or more nodes are fixture). Do not treat scores as live
-                results.
-              </span>
-            )}
+        <section className={`overflow-hidden rounded-3xl border p-5 shadow-sm ${
+          runPromoted
+            ? "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white"
+            : runRejected
+              ? "border-rose-200 bg-gradient-to-br from-rose-50 via-white to-amber-50/40"
+              : "border-slate-200 bg-white"
+        }`}>
+          <div className="grid gap-5 xl:grid-cols-[1.35fr_1fr] xl:items-center">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                  runPromoted ? "bg-emerald-600 text-white" : runRejected ? "bg-rose-600 text-white" : "bg-slate-900 text-white"
+                }`}>
+                  {runPromoted ? "promoted" : runRejected ? "rejected" : appState}
+                </span>
+                {results?.provenance?.mode && (
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    {results.provenance.mode} evidence
+                  </span>
+                )}
+                {results?.checkpointed && (
+                  <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">
+                    resumable checkpoint
+                  </span>
+                )}
+              </div>
+              <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-950 xl:text-3xl">{headline}</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
+                {focusVerdict?.summary || currentStep || results?.hypothesis || "Load a run to inspect every model, tool call, structure, and critic decision."}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {(focusVerdict?.reasons || []).map((reason) => (
+                  <span key={reason} className="rounded-lg border border-rose-200 bg-white px-2 py-1 font-mono text-[10px] font-semibold text-rose-700">{reason}</span>
+                ))}
+                {termination && (
+                  <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 font-mono text-[10px] text-slate-600">stop: {termination}</span>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
+              <SummaryMetric label="Promoted" value={String(promotedDesigns.length)} detail={`${rejectedDesigns.length} reject · ${heldDesigns.length} hold`} />
+              <SummaryMetric label="Best ipTM" value={bestIptm ? bestIptm.toFixed(2) : "—"} detail={`bar ≥ ${(results?.scientific_spec?.success_bars?.min_iptm ?? 0.75).toFixed(2)}`} />
+              <SummaryMetric label="Evidence nodes" value={`${liveNodes}/9`} detail="live or validated cache" />
+              <SummaryMetric label="Oracle ρ" value={results?.eval?.smallmol_spearman_rho?.toFixed(2) || "—"} detail={`n=${results?.eval?.smallmol_n || 0} controls`} />
+            </div>
           </div>
-        )}
+        </section>
 
-        {results?.run_id && appState === "completed" && (
-          <p className="mb-4 text-xs text-slate-500">
-            Showing run{" "}
-            <span className="font-mono text-slate-700">{results.run_id}</span>
-            {" · "}
-            mode{" "}
-            <span className="font-mono text-slate-700">
-              {results.provenance?.mode}
-            </span>
-          </p>
-        )}
-
-        {/* IDLE */}
-        {appState === "idle" && (
-          <div className="animate-fade-in">
-            <section className="relative overflow-hidden border border-slate-200/80 bg-white/70 px-6 py-14 sm:px-10 sm:py-16">
-              <div
-                className="pointer-events-none absolute inset-0 opacity-[0.07]"
-                style={{
-                  backgroundImage:
-                    "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230f766e' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
-                }}
-              />
-              <div className="relative max-w-2xl">
-                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-800">
-                  re:AGENT · Track A
-                </p>
-                <h2 className="font-display text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
-                  iDoctor Design
-                </h2>
-                <p className="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
-                  An AI scientist that reads how KRAS G12C drugs fail, designs a
-                  binder under those constraints, and only keeps what it cannot
-                  disprove.
-                </p>
-                <p className="mt-5 max-w-xl border-l-2 border-teal-600/50 pl-4 text-sm leading-relaxed text-slate-500">
-                  {HYPOTHESIS_TEASER}
-                </p>
-                <div className="mt-8 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleRun("replay")}
-                    className="bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-800"
-                  >
-                    Replay latest
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRun("fixture")}
-                    className="border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 transition-colors hover:border-teal-600 hover:text-teal-900"
-                  >
-                    Run fixture
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRun("live")}
-                    className="border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 transition-colors hover:border-teal-600 hover:text-teal-900"
-                  >
-                    Run live
-                  </button>
-                </div>
-                <p className="mt-3 text-[11px] text-slate-400">
-                  Stage default is <span className="font-mono">replay</span> of a
-                  saved run (demo-data banner on). Fixture works offline from
-                  bundled JSON. Live calls partners when keys exist — BindCraft
-                  is used only if a finished campaign is on disk; otherwise the
-                  engine column says heuristic, not RFdiffusion.
-                </p>
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-950">Autonomous scientist workflow</h2>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">9 agents</span>
               </div>
-            </section>
-
-            {pdbData && (
-              <div className="mt-8 animate-fade-in animate-fade-in-delay-1">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Structure · PDB {DEFAULT_PDB} (optional)
-                </p>
-                <ProteinViewer
-                  pdbData={pdbData}
-                  bindingResidues={pocketResidues}
-                  ligandId="ARS"
-                />
-              </div>
-            )}
+              <p className="mt-0.5 text-[11px] text-slate-500">Click any node for tools, provenance, model calls, and output summaries.</p>
+            </div>
+            <span className="font-mono text-[10px] text-slate-400">{results?.run_id || currentStep || "no run loaded"}</span>
           </div>
-        )}
+          <div className="h-[430px] overflow-hidden rounded-2xl border border-slate-100 bg-slate-50/70">
+            <AgentLineage
+              agentStatus={agentStatus}
+              currentStep={currentStep}
+              provenance={results?.provenance}
+              traces={results?.agent_traces}
+              labLog={labLog}
+              verdicts={allVerdicts}
+              designs={designs}
+              compounds={results?.smallmol?.compounds}
+              loopHistory={results?.loop_history}
+              className="h-full"
+            />
+          </div>
+        </section>
 
-        {/* RUNNING */}
-        {appState === "running" && (
-          <div className="animate-fade-in grid gap-6 lg:grid-cols-5">
-            <div className="lg:col-span-3">
-              <div className="mb-4">
-                <h2 className="font-display text-2xl font-semibold text-slate-900">
-                  Running iDoctor Design
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {currentStep || "Starting agent graph…"}
-                </p>
+        <ComplexResultsPanel
+          design={focusDesign}
+          successBars={results?.scientific_spec?.success_bars}
+          bindingResidues={pocketResidues}
+          fallbackPdbData={targetPdb}
+        />
+
+        <div className="grid gap-4 xl:grid-cols-12">
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-950">Candidate decision</h2>
+                <p className="mt-0.5 text-[11px] text-slate-500">The exact sequence and evidence used by the critic</p>
               </div>
-              {pdbData ? (
-                <ProteinViewer
-                  pdbData={pdbData}
-                  bindingResidues={pocketResidues}
-                  ligandId="ARS"
-                />
-              ) : (
-                <div className="flex h-64 items-center justify-center border border-dashed border-slate-300 bg-white/50 text-sm text-slate-400">
-                  Protein viewer unavailable (API optional)
-                </div>
+              {focusVerdict && (
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
+                  focusVerdict.verdict === "promote"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : focusVerdict.verdict === "reject"
+                      ? "bg-rose-100 text-rose-800"
+                      : "bg-amber-100 text-amber-800"
+                }`}>{focusVerdict.verdict}</span>
               )}
             </div>
-            <div className="lg:col-span-2">
-              <AgentStatusPanel
-                agentStatus={agentStatus}
-                currentStep={currentStep}
-                provenance={results?.provenance}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* COMPLETED — four regions */}
-        {appState === "completed" && results && (
-          <div className="space-y-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="max-w-3xl">
-                <h2 className="font-display text-2xl font-semibold text-slate-900">
-                  Trust results
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                  {results.hypothesis || results.scientific_spec?.hypothesis}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleDownloads}
-                  className="border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-teal-600"
-                >
-                  Download artifacts
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-900"
-                >
-                  New run
-                </button>
-              </div>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* A — Literature / mutations */}
-              <section className="animate-fade-in border border-slate-200 bg-white p-5">
-                <RegionLabel letter="A" title="Literature spec / mutations" />
-                <p className="mb-3 text-xs text-slate-500">
-                  {results.scientific_spec?.target?.clinical_hook}
-                </p>
-                <p className="mb-3 text-[10px] text-slate-400">
-                  WT = KRAS G12C without extra resistance mutation. Mutant =
-                  G12C plus one listed change. Click a mutation for source
-                  quotes.
-                </p>
-                <MutationMap
-                  mutations={results.scientific_spec?.mutations || []}
-                />
-                {(results.scientific_spec?.failed_small_molecules?.length ??
-                  0) > 0 && (
-                  <div className="mt-4 border-t border-slate-100 pt-3">
-                    <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Failed / limited small molecules
-                    </h4>
-                    <ul className="space-y-2">
-                      {results.scientific_spec.failed_small_molecules.map(
-                        (f) => (
-                          <li key={f.id} className="text-xs text-slate-600">
-                            <span className="font-medium text-slate-900">
-                              {f.name}
-                            </span>
-                            <span className="text-slate-400"> — </span>
-                            {f.why_not_enough}
-                          </li>
-                        )
-                      )}
-                    </ul>
+            {focusDesign ? (
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold text-slate-900">{focusDesign.id}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(focusDesign.sequence);
+                      setCopiedSeq(true);
+                      setTimeout(() => setCopiedSeq(false), 1600);
+                    }}
+                    className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                    {copiedSeq ? "Copied ✓" : "Copy FASTA"}
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  <TinyMetric label="Length" value={`${focusDesign.length} aa`} />
+                  <TinyMetric label="pLDDT" value={focusDesign.plddt?.toFixed(1) || "—"} />
+                  <TinyMetric label="ipTM" value={focusDesign.iptm?.toFixed(2) || "—"} />
+                  <TinyMetric label="PDB identity" value={focusDesign.novelty?.identity != null ? `≤${focusDesign.novelty.identity}` : "—"} />
+                </div>
+                <div className="rounded-xl bg-slate-950 p-3 font-mono text-[10px] leading-relaxed text-slate-200">
+                  <span className="break-all">{focusDesign.sequence}</span>
+                </div>
+                {focusVerdict && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs leading-relaxed text-slate-700">{focusVerdict.summary}</p>
+                    {focusVerdict.remaining_risk && (
+                      <p className="mt-2 text-[10px] leading-relaxed text-slate-500"><strong>Remaining risk:</strong> {focusVerdict.remaining_risk}</p>
+                    )}
                   </div>
                 )}
-              </section>
-
-              {/* B — Small-molecule control */}
-              <section className="animate-fade-in animate-fade-in-delay-1 border border-slate-200 bg-white p-5">
-                <RegionLabel letter="B" title="Small-molecule control" />
-                <p className="mb-3 text-xs text-slate-500">
-                  Docking is a control that can be disproven — not the product.
-                </p>
-                <EvalPanel evalData={results.eval} />
-                <div className="mt-4 border-t border-slate-100 pt-4">
-                  <SmallMolTable
-                    compounds={results.smallmol?.compounds || []}
-                    verdicts={results.verdicts?.items || []}
-                  />
-                </div>
-              </section>
-
-              {/* C — Designs + reject pile */}
-              <section className="animate-fade-in animate-fade-in-delay-2 border border-slate-200 bg-white p-5 lg:col-span-2">
-                <RegionLabel letter="C" title="Designs + reject pile" />
-                <DesignTable
-                  designs={results.designs?.designs || []}
-                  verdicts={results.verdicts?.items || []}
-                  deltas={results.eval?.design_deltas}
-                  designEngine={results.designs?.meta?.design_engine || results.designs?.meta?.engine}
-                />
-                <div className="mt-6">
-                  <RejectDrawer
-                    designs={results.designs?.designs || []}
-                    verdicts={results.verdicts?.items || []}
-                  />
-                </div>
-              </section>
-
-              {/* D — Monday experiment */}
-              <section className="animate-fade-in animate-fade-in-delay-3 border border-slate-200 bg-white p-5 lg:col-span-2">
-                <RegionLabel letter="D" title="Monday experiment" />
-                <ExperimentCard markdown={results.experiment_md || ""} />
-              </section>
-            </div>
-
-            {pdbData && (
-              <div className="border border-slate-200 bg-white p-4">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Structure context · {DEFAULT_PDB}
-                </p>
-                <ProteinViewer
-                  pdbData={pdbData}
-                  bindingResidues={pocketResidues}
-                  ligandId="ARS"
-                />
               </div>
+            ) : (
+              <p className="mt-4 text-xs text-slate-500">No candidate loaded.</p>
             )}
-          </div>
-        )}
-      </main>
+          </section>
 
-      <footer className="border-t border-slate-200 py-4 text-center text-[11px] text-slate-400">
-        iDoctor Design · re:AGENT 2026 · evidence before confidence
-      </footer>
+          <section className="xl:col-span-4">
+            <LabLog events={labLog} live={appState === "running"} />
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-base font-bold text-slate-950">Experiment handoff</h2>
+                <p className="mt-0.5 text-[11px] text-slate-500">Wet-lab boundary, never an automatic order</p>
+              </div>
+              <span className={`rounded-full px-2 py-1 text-[9px] font-bold uppercase ${
+                runPromoted ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+              }`}>{runPromoted ? "review" : "stop"}</span>
+            </div>
+            <div className="mt-4 max-h-[340px] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <ExperimentCard markdown={results?.experiment_md || "# No experiment generated"} />
+            </div>
+          </section>
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+function SummaryMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-white/80 bg-white/80 px-3 py-3 shadow-xs backdrop-blur">
+      <p className="text-[9px] font-bold uppercase tracking-[0.13em] text-slate-400">{label}</p>
+      <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-slate-950">{value}</p>
+      <p className="mt-0.5 text-[10px] text-slate-500">{detail}</p>
     </div>
   );
 }
 
-function RegionLabel({ letter, title }: { letter: string; title: string }) {
+function TinyMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="mb-4 flex items-center gap-2">
-      <span className="flex h-6 w-6 items-center justify-center bg-slate-900 text-[11px] font-bold text-teal-300">
-        {letter}
-      </span>
-      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+    <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
+      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-1 font-mono text-xs font-bold text-slate-800">{value}</p>
     </div>
   );
 }

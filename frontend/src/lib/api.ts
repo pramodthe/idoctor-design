@@ -7,9 +7,29 @@ import type {
   EvalPayload,
   VerdictsPayload,
   ProvenancePayload,
+  LabLogEvent,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+export function getRunArtifactUrl(path: string, download = false): string {
+  const params = new URLSearchParams({ path });
+  if (download) params.set("download", "true");
+  return `${API_BASE}/api/run-artifact?${params.toString()}`;
+}
+
+export async function getBinderPdb(path: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/binder-pdb?path=${encodeURIComponent(path)}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.pdb_data || null;
+  } catch {
+    return null;
+  }
+}
 
 export async function getProteinPDB(pdbId: string): Promise<string> {
   const res = await fetch(`${API_BASE}/api/protein/${pdbId}`);
@@ -52,7 +72,8 @@ export function pollDesignRun(
   onAgentUpdate: (agent: string, status: string) => void,
   onComplete: () => void,
   onError: (err: string) => void,
-  onStepUpdate?: (step: string) => void
+  onStepUpdate?: (step: string) => void,
+  onLabLog?: (events: LabLogEvent[]) => void
 ): () => void {
   let cancelled = false;
 
@@ -84,6 +105,9 @@ export function pollDesignRun(
         if (data.current_step && onStepUpdate) {
           onStepUpdate(data.current_step);
         }
+        if (Array.isArray(data.lab_log) && onLabLog) {
+          onLabLog(data.lab_log as LabLogEvent[]);
+        }
       } catch {
         if (!cancelled) {
           onError("Connection lost");
@@ -102,9 +126,11 @@ export function pollDesignRun(
 }
 
 export async function loadLatestRun(): Promise<IDoctorDesignResults | null> {
-  try {
     const res = await fetch(`${API_BASE}/api/runs/latest`);
-    if (!res.ok) return null;
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      throw new Error(`Backend returned ${res.status} while loading the latest run`);
+    }
     const data = await res.json();
     const spec = data.spec || data.scientific_spec;
     if (!spec || !data.designs || !data.provenance) return null;
@@ -120,10 +146,12 @@ export async function loadLatestRun(): Promise<IDoctorDesignResults | null> {
       experiment_md: data.experiment_md || "",
       provenance: data.provenance,
       agent_traces: data.agent_traces || [],
+      lab_log: data.lab_log || [],
+      loop_history: data.loop_history || undefined,
+      loop_termination_reason: data.loop_termination_reason || null,
+      complex_scores: data.complex_scores || undefined,
+      checkpointed: Boolean(data.checkpointed),
     };
-  } catch {
-    return null;
-  }
 }
 
 export async function loadFixtureResults(): Promise<IDoctorDesignResults> {
@@ -171,13 +199,15 @@ export async function loadFixtureResults(): Promise<IDoctorDesignResults> {
     experiment_md: experimentMd,
     provenance,
     agent_traces: [],
+    lab_log: [],
   };
 }
 
 export async function runWithFixtureFallback(
   mode: RunMode,
   onAgentUpdate: (agent: string, status: string) => void,
-  onStepUpdate: (step: string) => void
+  onStepUpdate: (step: string) => void,
+  onLabLog?: (events: LabLogEvent[]) => void
 ): Promise<IDoctorDesignResults> {
   try {
     const { job_id } = await startDesignRun(mode);
@@ -198,14 +228,20 @@ export async function runWithFixtureFallback(
           }
         },
         (err) => reject(new Error(err)),
-        onStepUpdate
+        onStepUpdate,
+        onLabLog
       );
     });
-  } catch {
+  } catch (error) {
+    if (mode !== "fixture") {
+      throw error;
+    }
     const agents = [
       "evidence",
       "designer",
       "structure",
+      "novelty",
+      "complex",
       "physics",
       "evaluate",
       "critic",
@@ -214,21 +250,27 @@ export async function runWithFixtureFallback(
     const steps = [
       "Reading resistance literature…",
       "Designing sequences under spec constraints…",
-      "Folding designs…",
+      "Loading structure metrics…",
+      "Checking PDB novelty with MMseqs2…",
+      "Evaluating G12C and resistance complexes…",
       "Docking small-molecule control…",
       "Scoring vs known Ki…",
       "Critic reviewing survivors…",
       "Writing Monday lab card…",
     ];
+    const log: LabLogEvent[] = [];
 
     for (let i = 0; i < agents.length; i++) {
       onStepUpdate(steps[i]);
       onAgentUpdate(agents[i], "running");
+      log.push({ agent: agents[i], kind: "step", text: steps[i] });
+      onLabLog?.(log.slice());
       await new Promise((r) => setTimeout(r, 280));
       onAgentUpdate(agents[i], "completed");
     }
 
-    return loadFixtureResults();
+    const fixture = await loadFixtureResults();
+    return { ...fixture, lab_log: log };
   }
 }
 

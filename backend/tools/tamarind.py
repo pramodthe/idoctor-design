@@ -79,6 +79,20 @@ def pick_fold_tool(tools: list[dict[str, Any]] | None = None) -> str:
     raise TamarindUnavailable("No fold/structure tool found in live GET /tools catalog.")
 
 
+def _drop_inapplicable(settings: dict[str, Any]) -> dict[str, Any]:
+    """Remove conditional keys validate-job echoes back but submit-job rejects.
+
+    validate-job fills every default, including settings that are only legal
+    when a controlling field has a particular value. Submitting that dict back
+    verbatim then 400s, e.g. `bfvdTemplates` is only accepted when
+    templateMode == "pdb100".
+    """
+    out = dict(settings)
+    if str(out.get("templateMode") or "") != "pdb100":
+        out.pop("bfvdTemplates", None)
+    return out
+
+
 def _validate_and_normalize(job_type: str, settings: dict[str, Any]) -> dict[str, Any]:
     r = requests.post(
         TAMARIND_VALIDATE,
@@ -92,7 +106,7 @@ def _validate_and_normalize(job_type: str, settings: dict[str, Any]) -> dict[str
         raise TamarindUnavailable(
             f"validate-job failed for {job_type}: {payload.get('error')}"
         )
-    return payload.get("normalized") or settings
+    return _drop_inapplicable(payload.get("normalized") or settings)
 
 
 def validate_job_spec(job_type: str, settings: dict[str, Any]) -> dict[str, Any]:
@@ -304,6 +318,226 @@ def submit_fold(sequences: list[dict[str, str]], **kwargs: Any) -> dict[str, Any
             "Tamarind unavailable: no successful fold metrics. " + "; ".join(errors[:3])
         )
     return {"metrics": metrics, "errors": errors, "job_type": job_type}
+
+
+def _complex_metrics_from_zip(
+    job_name: str,
+    dest_dir: str | None = None,
+    artifact_label: str | None = None,
+) -> dict[str, Any]:
+    """Read metrics and preserve useful Tamarind result artifacts.
+
+    Tamarind returns substantially more than one PDB: confidence plots, PAE
+    matrices, score JSON, settings, logs, alignments, and CSV tables.  Keep a
+    manifest of those files so the trust UI can expose the actual model output
+    instead of reducing a job to two scalar scores.
+    """
+    import csv
+    import io
+    import zipfile
+    from pathlib import Path
+
+    response = requests.post(
+        TAMARIND_RESULT, headers=_headers(), json={"jobName": job_name}, timeout=60
+    )
+    response.raise_for_status()
+    url = response.text.strip().strip('"')
+    if not url.startswith("http"):
+        raise TamarindUnavailable(f"result for {job_name} did not return a URL")
+    archive_response = requests.get(url, timeout=180)
+    archive_response.raise_for_status()
+    archive = zipfile.ZipFile(io.BytesIO(archive_response.content))
+
+    rows: list[dict[str, str]] = []
+    for name in archive.namelist():
+        if name.lower().endswith(".csv"):
+            text = archive.read(name).decode("utf-8", "replace").splitlines()
+            rows.extend(list(csv.DictReader(text)))
+
+    def number(row: dict[str, Any], *wanted: str) -> float | None:
+        normalized = {
+            re.sub(r"[^a-z0-9]+", "", str(key).lower()): value
+            for key, value in row.items()
+        }
+        for key in wanted:
+            value = normalized.get(re.sub(r"[^a-z0-9]+", "", key.lower()))
+            if value not in (None, ""):
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    parsed_rows = [
+        {
+            "iptm": number(row, "iptm", "interface_ptm"),
+            "plddt": number(row, "plddt", "avg_plddt", "mean_plddt"),
+            "ptm": number(row, "ptm"),
+            "ipsae": number(row, "ipsae", "ipsae_score"),
+            "ranking_score": number(row, "ranking_score", "aggregate_score"),
+            "raw": row,
+        }
+        for row in rows
+    ]
+    best = max(
+        parsed_rows,
+        key=lambda row: (
+            row.get("iptm") if row.get("iptm") is not None else -1.0,
+            row.get("ranking_score")
+            if row.get("ranking_score") is not None
+            else -1.0,
+        ),
+        default={},
+    )
+
+    pdb_path = None
+    artifacts: list[dict[str, str]] = []
+    if dest_dir:
+        out_dir = Path(dest_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        label = re.sub(r"[^a-zA-Z0-9_-]+", "-", artifact_label or job_name)
+        artifact_dir = out_dir / f"{label}-artifacts"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+
+        def artifact_kind(filename: str) -> str:
+            lower = filename.lower()
+            if lower.endswith(".png"):
+                return "image"
+            if lower.endswith(".pdb"):
+                return "structure"
+            if lower.endswith((".csv", ".parquet")):
+                return "table"
+            if lower.endswith(".a3m"):
+                return "alignment"
+            if lower.endswith(".json"):
+                return "data"
+            if lower.endswith((".log", ".txt")):
+                return "log"
+            return "file"
+
+        for member in archive.infolist():
+            if member.is_dir():
+                continue
+            safe_name = Path(member.filename).name
+            if not safe_name:
+                continue
+            target = artifact_dir / safe_name
+            target.write_bytes(archive.read(member.filename))
+            artifacts.append(
+                {
+                    "name": safe_name,
+                    "kind": artifact_kind(safe_name),
+                    "path": str(target),
+                }
+            )
+
+        pdb_names = [name for name in archive.namelist() if name.lower().endswith(".pdb")]
+        if pdb_names:
+            target = out_dir / f"{label}.pdb"
+            target.write_bytes(archive.read(pdb_names[0]))
+            pdb_path = str(target)
+    return {**best, "pdb_path": pdb_path, "artifacts": artifacts}
+
+
+def submit_complex_panel(
+    binder_id: str,
+    binder_sequence: str,
+    targets: dict[str, str],
+    *,
+    structures_dir: str | None = None,
+    timeout: float = 1800.0,
+    job_type: str = "alphafold",
+) -> dict[str, Any]:
+    """Predict target:binder complexes and return real interface metrics per target.
+
+    AlphaFold multimer receives colon-separated chains and Tamarind's IPSAE option.
+    All target variants are submitted first, then polled concurrently.
+    """
+    if not is_configured():
+        raise TamarindUnavailable("Tamarind unavailable: TAMARIND_API_KEY not set.")
+    if not binder_sequence or not targets:
+        raise TamarindUnavailable("Complex panel needs a binder and at least one target")
+
+    available = {str(tool.get("name") or "") for tool in list_tools()}
+    if job_type not in available:
+        raise TamarindUnavailable(f"Tamarind tool {job_type!r} is not available")
+
+    submitted: list[tuple[str, str]] = []
+    errors: list[str] = []
+    for variant, target_sequence in targets.items():
+        settings = {
+            "sequence": f"{target_sequence}:{binder_sequence}",
+            "numModels": "1",
+            "numRecycles": 3,
+            "numRelax": 0,
+            "useMSA": True,
+            "pairMode": "unpaired_paired",
+            "templateMode": "none",
+            "ipsaeScoring": True,
+            "modelType": "alphafold2_multimer_v3",
+        }
+        try:
+            normalized = _validate_and_normalize(job_type, settings)
+            job_name = _safe_job_name(f"complex-{binder_id}-{variant}")
+            response = requests.post(
+                TAMARIND_SUBMIT,
+                headers=_headers(),
+                json={"jobName": job_name, "type": job_type, "settings": normalized},
+                timeout=60,
+            )
+            if response.status_code >= 400:
+                raise TamarindUnavailable(
+                    f"submit-job {job_type} HTTP {response.status_code}: {response.text[:240]}"
+                )
+            submitted.append((variant, job_name))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{variant}: {exc}")
+
+    if not submitted:
+        raise TamarindUnavailable("No complex jobs accepted. " + "; ".join(errors[:3]))
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    def collect(pair: tuple[str, str]) -> tuple[str, dict[str, Any] | None]:
+        variant, job_name = pair
+        try:
+            job = _poll_job(job_name, budget_s=timeout)
+            metrics = _complex_metrics_from_zip(
+                job_name,
+                structures_dir,
+                artifact_label=f"{binder_id}-{variant}-complex",
+            )
+            fallback = _metrics_from_job(job)
+            for key in ("plddt", "iptm", "ptm"):
+                if metrics.get(key) is None:
+                    metrics[key] = fallback.get(key)
+            metrics.update(
+                {
+                    "job_name": job_name,
+                    "job_type": job_type,
+                    "variant": variant,
+                }
+            )
+            if metrics.get("iptm") is None:
+                raise TamarindUnavailable(f"{job_name}: result had no ipTM")
+            return variant, metrics
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{variant}: {exc}")
+            return variant, None
+
+    with ThreadPoolExecutor(max_workers=min(4, len(submitted))) as pool:
+        collected = list(pool.map(collect, submitted))
+    metrics = {variant: row for variant, row in collected if row is not None}
+    if not metrics:
+        raise TamarindUnavailable("Complex jobs produced no ipTM. " + "; ".join(errors[:3]))
+    return {
+        "binder_id": binder_id,
+        "metrics": metrics,
+        "errors": errors,
+        "job_type": job_type,
+        "score_kind": "iptm",
+        "score_direction": "higher_is_better",
+    }
 
 
 def upload_file(path: str, folder: str = "inputs") -> str:

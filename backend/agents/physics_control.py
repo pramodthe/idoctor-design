@@ -13,7 +13,7 @@ from backend.contracts.validate import validate_smallmol
 
 
 AGENT_NAME = "physics"
-AGENT_DISPLAY = "Docking control (AutoDock Vina)"
+AGENT_DISPLAY = "Docking control"
 
 DOCKING_SCORES = DATA_DIR / "docking" / "vina_scores.json"
 
@@ -126,7 +126,19 @@ def run_physics(state: dict, progress_cb=None) -> dict:
 
     smallmol: dict | None = None
 
-    if mode == "replay":
+    if int(state.get("design_retry_count") or 0) > 0 and state.get("smallmol"):
+        smallmol = state["smallmol"]
+        node_source = provenance_nodes.get(AGENT_NAME) or "cached"
+        steps.append(
+            {
+                "action": "Reuse small-molecule control",
+                "detail": "Critic redesign does not re-dock the KRAS library",
+            }
+        )
+        tool_calls.append(
+            {"tool": "vina.cached", "detail": "skipped on designer retry"}
+        )
+    elif mode == "replay":
         path = run_dir / "smallmol.json"
         smallmol = json.loads(path.read_text())
         node_source = "cached"
@@ -195,6 +207,7 @@ def run_physics(state: dict, progress_cb=None) -> dict:
         "output_summary": f"{n} compounds in smallmol.json (node={node_source})",
         "steps": steps,
         "tool_calls": tool_calls,
+        "llm_calls": [],
     }
     traces = list(state.get("agent_traces") or [])
     traces.append(trace)

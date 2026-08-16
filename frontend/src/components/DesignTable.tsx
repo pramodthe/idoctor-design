@@ -14,9 +14,9 @@ interface DesignTableProps {
 }
 
 const VERDICT_BADGE: Record<string, string> = {
-  promote: "bg-emerald-50 text-emerald-800 border-emerald-300",
-  reject: "bg-red-50 text-red-800 border-red-300",
-  hold: "bg-slate-100 text-slate-700 border-slate-300",
+  promote: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  reject: "bg-red-50 text-red-700 border-red-200",
+  hold: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 function engineLabel(d: Design, payloadEngine?: string): string {
@@ -63,7 +63,7 @@ export default function DesignTable({
 
   if (rows.length === 0) {
     return (
-      <p className="py-4 text-xs text-slate-400">
+      <p className="py-4 text-xs text-slate-500">
         {rejectOnly ? "No rejected designs in this run." : "No designs."}
       </p>
     );
@@ -72,14 +72,14 @@ export default function DesignTable({
   return (
     <div>
       {title && (
-        <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
           {title}
         </h4>
       )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-xs">
           <thead>
-            <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+            <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
               <th className="pb-2 pr-3 font-semibold">ID</th>
               <th className="pb-2 pr-3 font-semibold">Sequence</th>
               <th className="pb-2 pr-3 font-semibold">Len</th>
@@ -107,25 +107,25 @@ export default function DesignTable({
               return (
                 <Fragment key={d.id}>
                   <tr
-                    className={`cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50/80 ${
-                      v?.verdict === "reject" ? "bg-red-50/30" : ""
-                    } ${v?.verdict === "promote" ? "bg-emerald-50/40" : ""}`}
+                    className={`cursor-pointer border-b border-slate-200/60 transition-colors hover:bg-slate-50 ${
+                      v?.verdict === "reject" ? "bg-red-50/80" : ""
+                    } ${v?.verdict === "promote" ? "bg-emerald-50/80" : ""}`}
                     onClick={() => setExpanded(open ? null : d.id)}
                   >
-                    <td className="py-2.5 pr-3 font-mono font-medium text-slate-900">
+                    <td className="py-2.5 pr-3 font-mono font-medium text-slate-800">
                       {d.id}
                     </td>
-                    <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-600">
+                    <td className="py-2.5 pr-3 font-mono text-[11px] text-slate-400">
                       {truncateSeq(d.sequence)}
                     </td>
                     <td className="py-2.5 pr-3 text-slate-700">{d.length}</td>
                     <td className="py-2.5 pr-3 font-mono text-slate-700">
                       {d.plddt != null ? d.plddt.toFixed(1) : "—"}
                     </td>
-                    <td className="py-2.5 pr-3 text-[10px] text-slate-600">
+                    <td className="py-2.5 pr-3 text-[10px] text-slate-400">
                       {engineLabel(d, designEngine)}
                     </td>
-                    <td className="py-2.5 pr-3 font-mono text-[10px] text-slate-600">
+                    <td className="py-2.5 pr-3 font-mono text-[10px] text-slate-400">
                       {delta?.wt_score != null ? delta.wt_score : "—"} / {mutantStr}
                     </td>
                     <td className="py-2.5">
@@ -136,30 +136,30 @@ export default function DesignTable({
                           {v.verdict}
                         </span>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-slate-600">—</span>
                       )}
                     </td>
                   </tr>
                   {open && (
-                    <tr className="border-b border-slate-100 bg-slate-50/60">
+                    <tr className="border-b border-slate-200/60 bg-slate-50">
                       <td colSpan={7} className="px-3 py-3">
                         <div className="space-y-2">
                           <div>
-                            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                               FASTA
                             </div>
-                            <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[11px] text-slate-700">
+                            <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[11px] text-blue-700">
                               {`>${d.id}\n${d.sequence}`}
                             </pre>
                           </div>
-                          <p className="text-[11px] text-slate-600">
+                          <p className="text-[11px] text-slate-400">
                             Engine: {engineLabel(d, designEngine)}
                             {d.fold_method ? ` · fold_method=${d.fold_method}` : ""}
                             {d.provenance ? ` · provenance=${d.provenance}` : ""}
                           </p>
                           {v && (
                             <div>
-                              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                                 Critic
                               </div>
                               <p className="text-xs leading-relaxed text-slate-700">
@@ -170,7 +170,7 @@ export default function DesignTable({
                                   {v.reasons.map((r) => (
                                     <span
                                       key={r}
-                                      className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-600"
+                                      className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-400"
                                     >
                                       {r}
                                     </span>
@@ -178,7 +178,7 @@ export default function DesignTable({
                                 </div>
                               )}
                               {v.remaining_risk && (
-                                <p className="mt-2 text-[11px] text-amber-800">
+                                <p className="mt-2 text-[11px] text-amber-700">
                                   Remaining risk: {v.remaining_risk}
                                 </p>
                               )}
@@ -197,7 +197,7 @@ export default function DesignTable({
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-[10px] text-slate-400">
+      <p className="mt-2 text-[10px] text-slate-500">
         Click a row for full sequence and critic text. Rejected designs stay visible.
       </p>
     </div>

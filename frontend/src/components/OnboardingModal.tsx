@@ -6,10 +6,10 @@ interface OnboardingModalProps {
 
 export default function OnboardingModal({ onDismiss }: OnboardingModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-      <div className="animate-fade-in mx-4 w-full max-w-md border border-slate-200 bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="animate-fade-in mx-4 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-teal-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
               iD
           </div>
           <div>
@@ -34,13 +34,12 @@ export default function OnboardingModal({ onDismiss }: OnboardingModalProps) {
             binders, or contradict the literature — the reject pile is part of the product.
           </p>
           <p>
-            What you get is a promoted sequence you can check, plus a Monday wet-lab card for
-            G12C versus the mutant.
+            What you get is a promoted sequence you can check, plus a ready-to-run wet-lab card for
+            G12C versus the mutant — anytime you want to pipette.
           </p>
           <p>
-            If partner APIs are down, run fixture or replay; the demo-data
-            banner (className demo-banner) will say so. Do not treat heuristic
-            sequence_design as RFdiffusion.
+            If partner APIs are down, run Demo or Load; the amber banner will say so. Do not treat
+            heuristic sequence_design as RFdiffusion.
           </p>
         </div>
 
@@ -48,9 +47,9 @@ export default function OnboardingModal({ onDismiss }: OnboardingModalProps) {
           <button
             type="button"
             onClick={onDismiss}
-            className="bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-teal-800"
+            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500"
           >
-            Open lab
+            Open console
           </button>
         </div>
       </div>
